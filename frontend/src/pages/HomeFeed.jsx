@@ -9,16 +9,7 @@ import {
 } from 'lucide-react';
 
 const HomeFeed = () => {
-  const { user } = () => {
-    // Safely wrap context auth details
-    try {
-      return useAuth();
-    } catch (e) {
-      return { user: null };
-    }
-  };
-  const authContext = useAuth();
-  const currentUser = authContext.user;
+  const { user: currentUser } = useAuth();
   const navigate = useNavigate();
 
   const [posts, setPosts] = useState([]);
