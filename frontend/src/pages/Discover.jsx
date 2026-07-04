@@ -55,7 +55,7 @@ const Discover = () => {
     try {
       const res = await api.get(`/api/follow/${user.id}/following`);
       if (res.success) {
-        setFollowingIds(res.following.map(f => f.followingId?._id || f.followingId));
+        setFollowingIds((res.following || []).map(f => f.followingId?._id || f.followingId));
       }
     } catch (e) {
       console.error(e);
@@ -157,21 +157,30 @@ const Discover = () => {
   };
 
   // Filter systems
-  const filteredCreators = creators.filter(c => {
-    const matchesSearch = c.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-      (c.headline && c.headline.toLowerCase().includes(searchQuery.toLowerCase()));
+  const filteredCreators = (creators || []).filter(c => {
+    if (!c) return false;
+    const name = c.name || '';
+    const headline = c.headline || '';
+    const categoryVal = c.category || '';
+    
+    const matchesSearch = name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+      headline.toLowerCase().includes(searchQuery.toLowerCase());
     
     if (selectedSector === 'All') return matchesSearch;
-    // Map matching sector
-    return matchesSearch && c.category && c.category.toLowerCase().includes(selectedSector.toLowerCase());
+    return matchesSearch && categoryVal.toLowerCase().includes(selectedSector.toLowerCase());
   });
 
-  const filteredProjects = projects.filter(p => {
-    const matchesSearch = p.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
-      (p.description && p.description.toLowerCase().includes(searchQuery.toLowerCase()));
+  const filteredProjects = (projects || []).filter(p => {
+    if (!p) return false;
+    const title = p.title || '';
+    const desc = p.description || '';
+    const categoryVal = p.category || '';
+    
+    const matchesSearch = title.toLowerCase().includes(searchQuery.toLowerCase()) || 
+      desc.toLowerCase().includes(searchQuery.toLowerCase());
     
     if (selectedSector === 'All') return matchesSearch;
-    return matchesSearch && p.category && p.category.toLowerCase().includes(selectedSector.toLowerCase());
+    return matchesSearch && categoryVal.toLowerCase().includes(selectedSector.toLowerCase());
   });
 
   return (

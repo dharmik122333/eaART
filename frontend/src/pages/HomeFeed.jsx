@@ -60,7 +60,7 @@ const HomeFeed = () => {
     try {
       const res = await api.get(`/api/follow/${currentUser.id}/following`);
       if (res.success) {
-        setFollowingIds(res.following.map(f => f.followingId?._id || f.followingId));
+        setFollowingIds((res.following || []).map(f => f.followingId?._id || f.followingId));
       }
     } catch (err) {
       console.error('Failed to load following list:', err.message);
