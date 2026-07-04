@@ -6,7 +6,8 @@ import {
   Search, Users, Briefcase, Compass, ShieldAlert, 
   MapPin, Calendar, Award, ExternalLink, ArrowRight, UserPlus,
   Flame, TrendingUp, Sparkles, Gamepad2, Film, Music, Cpu, Camera, Shirt,
-  Shield, CheckCircle, HelpCircle, Heart, MessageSquare, Plus, Bell, Bookmark
+  Shield, CheckCircle, HelpCircle, Heart, MessageSquare, Plus, Bell, Bookmark,
+  Loader
 } from 'lucide-react';
 import CreatorCard from '../components/CreatorCard';
 import ProjectCard from '../components/ProjectCard';

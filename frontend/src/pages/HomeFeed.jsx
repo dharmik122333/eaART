@@ -5,7 +5,8 @@ import { api } from '../services/api';
 import { 
   Send, Image, Video, Award, HelpCircle, Heart, MessageSquare, 
   Share2, Bookmark, Trash2, MapPin, Globe, Compass, ChevronDown, Check, UserPlus,
-  Briefcase, Users, Code, Film, Camera, Palette, FileText, CheckCircle, Smile, Edit2
+  Briefcase, Users, Code, Film, Camera, Palette, FileText, CheckCircle, Smile, Edit2,
+  Paperclip
 } from 'lucide-react';
 
 const HomeFeed = () => {
