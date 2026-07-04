@@ -26,6 +26,24 @@ const ProjectDetails = () => {
   const [applyLoading, setApplyLoading] = useState(false);
   const [applyError, setApplyError] = useState('');
 
+  // AI Matchmaking calculator
+  const getMatchScore = () => {
+    if (!user || user.role !== 'Creator' || !project || !project.requiredSkills || project.requiredSkills.length === 0) {
+      return { score: 100, matched: [], missing: [] };
+    }
+    const userSkills = user.skills || [];
+    const matched = project.requiredSkills.filter(s => 
+      userSkills.some(us => us.toLowerCase().trim() === s.toLowerCase().trim())
+    );
+    const missing = project.requiredSkills.filter(s => 
+      !userSkills.some(us => us.toLowerCase().trim() === s.toLowerCase().trim())
+    );
+    const score = Math.round((matched.length / project.requiredSkills.length) * 100);
+    return { score, matched, missing };
+  };
+
+  const { score, matched, missing } = getMatchScore();
+
   // Bookmarking / Saving state
   const [isSaved, setIsSaved] = useState(false);
   const [saveLoading, setSaveLoading] = useState(false);
@@ -352,6 +370,90 @@ const ProjectDetails = () => {
 
         {/* Right Side: Contract Terms & Actions */}
         <div className="space-y-6">
+          {/* AI Matchmaking Score Card */}
+          {user && user.role === 'Creator' && (
+            <div className="glass-panel p-6 rounded-2xl border border-primary/20 bg-primary/[0.01] space-y-4 relative overflow-hidden">
+              <div className="absolute top-[-20%] right-[-20%] w-[50%] h-[50%] bg-primary-glow/10 rounded-full filter blur-[30px] pointer-events-none" />
+              
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-bold text-white tracking-tight flex items-center gap-2">
+                  <Award className="w-4 h-4 text-primary-glow" />
+                  <span>AI Smart Match Fit</span>
+                </h3>
+                <span className="text-[10px] font-mono bg-primary/20 text-primary-glow border border-primary/30 px-2 py-0.5 rounded font-bold animate-pulse">
+                  BETA
+                </span>
+              </div>
+
+              <div className="flex items-center gap-4">
+                <div className="relative flex-shrink-0">
+                  {/* Circular progress bar */}
+                  <svg className="w-16 h-16 transform -rotate-90">
+                    <circle 
+                      cx="32" 
+                      cy="32" 
+                      r="26" 
+                      stroke="#18181b" 
+                      strokeWidth="4" 
+                      fill="transparent" 
+                    />
+                    <circle 
+                      cx="32" 
+                      cy="32" 
+                      r="26" 
+                      stroke="#a855f7" 
+                      strokeWidth="4" 
+                      fill="transparent" 
+                      strokeDasharray={`${2 * Math.PI * 26}`}
+                      strokeDashoffset={`${2 * Math.PI * 26 * (1 - score / 100)}`}
+                      strokeLinecap="round"
+                    />
+                  </svg>
+                  <span className="absolute inset-0 flex items-center justify-center text-xs font-mono font-bold text-white">
+                    {score}%
+                  </span>
+                </div>
+
+                <div className="space-y-1">
+                  <p className="text-xs text-zinc-350 font-semibold leading-relaxed">
+                    {score >= 80 ? '🔥 Highly Recommended Fit!' : score >= 50 ? '⚡ Strong Match Potential' : '💡 Match rate is developing'}
+                  </p>
+                  <p className="text-[10px] text-zinc-500 leading-normal">
+                    Comparing your profile skills index against target recruiter requirements.
+                  </p>
+                </div>
+              </div>
+
+              {/* Tag overlaps */}
+              <div className="space-y-2 pt-2 border-t border-border/40">
+                {matched.length > 0 && (
+                  <div className="space-y-1">
+                    <span className="text-[9px] text-zinc-500 font-bold uppercase tracking-wider block">Matched Tags</span>
+                    <div className="flex flex-wrap gap-1">
+                      {matched.map(tag => (
+                        <span key={tag} className="text-[9px] px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-medium">
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {missing.length > 0 && (
+                  <div className="space-y-1">
+                    <span className="text-[9px] text-zinc-500 font-bold uppercase tracking-wider block">Missing Tags</span>
+                    <div className="flex flex-wrap gap-1">
+                      {missing.map(tag => (
+                        <span key={tag} className="text-[9px] px-2 py-0.5 rounded bg-zinc-900 border border-zinc-800 text-zinc-400 font-medium">
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           <div className="glass-panel p-6 rounded-2xl border border-border space-y-4">
             <h3 className="text-sm font-bold text-white border-b border-border/40 pb-3">
               Contract Specifications

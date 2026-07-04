@@ -202,7 +202,9 @@ const Dashboard = () => {
         <div className="glass-panel p-6 rounded-xl border border-border flex items-center justify-between">
           <div>
             <span className="text-xs text-zinc-500 font-medium">Profile Performance</span>
-            <span className="block text-2xl font-bold text-white mt-1">428 Views</span>
+            <span className="block text-2xl font-bold text-white mt-1">
+              {user.profileViews || 0} Views
+            </span>
             <span className="text-[10px] text-emerald-400 flex items-center gap-1 mt-1 font-mono">
               <TrendingUp className="w-3 h-3" />
               <span>+18% from last week</span>
