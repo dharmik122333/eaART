@@ -71,6 +71,53 @@ const UserSchema = new mongoose.Schema({
     type: String,
     default: '', // For recruiters
   },
+  coverBanner: {
+    type: String,
+    default: '',
+  },
+  headline: {
+    type: String,
+    default: '', // Professional Title
+  },
+  industry: {
+    type: String,
+    default: '',
+  },
+  experience: {
+    type: [{
+      company: String,
+      title: String,
+      duration: String,
+      description: String
+    }],
+    default: []
+  },
+  education: {
+    type: [{
+      school: String,
+      degree: String,
+      fieldOfStudy: String,
+      duration: String
+    }],
+    default: []
+  },
+  achievements: {
+    type: [{
+      title: String,
+      issuer: String,
+      date: String,
+      description: String
+    }],
+    default: []
+  },
+  profileViews: {
+    type: Number,
+    default: 0
+  },
+  portfolioViews: {
+    type: Number,
+    default: 0
+  },
   createdAt: {
     type: Date,
     default: Date.now,

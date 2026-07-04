@@ -26,6 +26,14 @@ app.use('/api/users', require('./routes/userRoutes'));
 app.use('/api/portfolios', require('./routes/portfolioRoutes'));
 app.use('/api/projects', require('./routes/projectRoutes'));
 app.use('/api/applications', require('./routes/applicationRoutes'));
+app.use('/api/posts', require('./routes/postRoutes'));
+app.use('/api/comments', require('./routes/commentRoutes'));
+app.use('/api/follow', require('./routes/followRoutes'));
+app.use('/api/notifications', require('./routes/notificationRoutes'));
+app.use('/api/messages', require('./routes/messageRoutes'));
+app.use('/api/communities', require('./routes/communityRoutes'));
+app.use('/api/events', require('./routes/eventRoutes'));
+app.use('/api/recommendations', require('./routes/recommendationRoutes'));
 
 // Welcome/Status endpoint
 app.get('/', (req, res) => {

@@ -27,7 +27,7 @@ const Login = () => {
 
     try {
       await login(formData.email, formData.password);
-      navigate('/dashboard');
+      navigate('/feed');
     } catch (err) {
       setLocalError(err.message || 'Failed to sign in. Please verify your credentials.');
     } finally {

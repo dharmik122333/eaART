@@ -1,13 +1,40 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Globe, LogOut, Menu, X, Briefcase, User, Compass, FileText, Settings, LayoutDashboard } from 'lucide-react';
+import { api } from '../services/api';
+import { 
+  Globe, LogOut, Menu, X, Briefcase, User, Compass, 
+  FileText, Settings, LayoutDashboard, Home, MessageSquare, Bell 
+} from 'lucide-react';
 
 const Navbar = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [isOpen, setIsOpen] = useState(false);
+  const [unreadNotifs, setUnreadNotifs] = useState(0);
+  const [unreadMsgs, setUnreadMsgs] = useState(0);
+
+  useEffect(() => {
+    if (!user) return;
+    const fetchUnread = async () => {
+      try {
+        const notifData = await api.get('/api/notifications');
+        if (notifData.success) {
+          setUnreadNotifs(notifData.notifications.filter(n => !n.isRead).length);
+        }
+        const convoData = await api.get('/api/messages/conversations');
+        if (convoData.success) {
+          setUnreadMsgs(convoData.conversations.filter(c => !c.isRead).length);
+        }
+      } catch (err) {
+        console.error('Failed to fetch unread counters:', err.message);
+      }
+    };
+    fetchUnread();
+    const interval = setInterval(fetchUnread, 15000);
+    return () => clearInterval(interval);
+  }, [user]);
 
   const handleLogout = () => {
     logout();
@@ -17,7 +44,7 @@ const Navbar = () => {
   const isActive = (path) => location.pathname === path;
 
   const navLinkClass = (path) => `
-    flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200
+    relative flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200
     ${isActive(path) 
       ? 'bg-primary/20 text-primary-glow border border-primary/30 shadow-[0_0_15px_rgba(124,58,237,0.15)]' 
       : 'text-zinc-400 hover:text-white hover:bg-zinc-800/40 border border-transparent'}
@@ -39,37 +66,62 @@ const Navbar = () => {
 
           {/* Desktop Navigation */}
           <div className="hidden md:flex items-center gap-2">
-            <Link to="/explore-projects" className={navLinkClass('/explore-projects')}>
-              <Compass className="w-4 h-4" />
-              <span>Explore Projects</span>
-            </Link>
-            <Link to="/explore-creators" className={navLinkClass('/explore-creators')}>
-              <User className="w-4 h-4" />
-              <span>Explore Creators</span>
-            </Link>
-
             {user ? (
               <>
+                <Link to="/feed" className={navLinkClass('/feed')}>
+                  <Home className="w-4 h-4" />
+                  <span>Feed</span>
+                </Link>
+                <Link to="/discover" className={navLinkClass('/discover')}>
+                  <Compass className="w-4 h-4" />
+                  <span>Discover</span>
+                </Link>
+                <Link to="/messages" className={navLinkClass('/messages')}>
+                  <MessageSquare className="w-4 h-4" />
+                  <span>Messages</span>
+                  {unreadMsgs > 0 && (
+                    <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-primary-glow animate-ping" />
+                  )}
+                </Link>
+                <Link to="/notifications" className={navLinkClass('/notifications')}>
+                  <Bell className="w-4 h-4" />
+                  <span>Notifications</span>
+                  {unreadNotifs > 0 && (
+                    <span className="absolute -top-1 -right-1 px-1.5 py-0.5 rounded-full bg-primary-glow text-[9px] font-bold text-white leading-none">
+                      {unreadNotifs}
+                    </span>
+                  )}
+                </Link>
                 <Link to="/dashboard" className={navLinkClass('/dashboard')}>
                   <LayoutDashboard className="w-4 h-4" />
                   <span>Dashboard</span>
                 </Link>
                 {user.role === 'Creator' && (
-                  <>
-                    <Link to="/applications" className={navLinkClass('/applications')}>
-                      <FileText className="w-4 h-4" />
-                      <span>Applications</span>
-                    </Link>
-                    <Link to={`/creator/${user.id}`} className={navLinkClass(`/creator/${user.id}`)}>
-                      <Briefcase className="w-4 h-4" />
-                      <span>My Portfolio</span>
-                    </Link>
-                  </>
+                  <Link to={`/creator/${user.id}`} className={navLinkClass(`/creator/${user.id}`)}>
+                    <Briefcase className="w-4 h-4" />
+                    <span>My Portfolio</span>
+                  </Link>
                 )}
                 <Link to="/settings" className={navLinkClass('/settings')}>
                   <Settings className="w-4 h-4" />
                   <span>Settings</span>
                 </Link>
+              </>
+            ) : (
+              <>
+                <Link to="/explore-projects" className={navLinkClass('/explore-projects')}>
+                  <Compass className="w-4 h-4" />
+                  <span>Explore Projects</span>
+                </Link>
+                <Link to="/explore-creators" className={navLinkClass('/explore-creators')}>
+                  <User className="w-4 h-4" />
+                  <span>Explore Creators</span>
+                </Link>
+              </>
+            )}
+
+            {user ? (
+              <>
                 <div className="w-px h-6 bg-border mx-2" />
                 
                 {/* User avatar/profile details */}
@@ -80,7 +132,7 @@ const Navbar = () => {
                   </div>
                   {user.profileImage ? (
                     <img 
-                      src={user.profileImage.startsWith('/') ? user.profileImage : user.profileImage} 
+                      src={user.profileImage} 
                       alt={user.name} 
                       className="w-8 h-8 rounded-full border border-primary/40 object-cover"
                     />
@@ -126,27 +178,27 @@ const Navbar = () => {
       {/* Mobile Menu */}
       {isOpen && (
         <div className="md:hidden border-t border-border bg-background px-4 py-3 space-y-2">
-          <Link to="/explore-projects" className="block px-3 py-2 rounded-md text-zinc-300 hover:text-white hover:bg-zinc-800" onClick={() => setIsOpen(false)}>
-            Explore Projects
-          </Link>
-          <Link to="/explore-creators" className="block px-3 py-2 rounded-md text-zinc-300 hover:text-white hover:bg-zinc-800" onClick={() => setIsOpen(false)}>
-            Explore Creators
-          </Link>
-          
           {user ? (
             <>
+              <Link to="/feed" className="block px-3 py-2 rounded-md text-zinc-300 hover:text-white hover:bg-zinc-800" onClick={() => setIsOpen(false)}>
+                Home Feed
+              </Link>
+              <Link to="/discover" className="block px-3 py-2 rounded-md text-zinc-300 hover:text-white hover:bg-zinc-800" onClick={() => setIsOpen(false)}>
+                Discover
+              </Link>
+              <Link to="/messages" className="block px-3 py-2 rounded-md text-zinc-300 hover:text-white hover:bg-zinc-800" onClick={() => setIsOpen(false)}>
+                Messages
+              </Link>
+              <Link to="/notifications" className="block px-3 py-2 rounded-md text-zinc-300 hover:text-white hover:bg-zinc-800" onClick={() => setIsOpen(false)}>
+                Notifications
+              </Link>
               <Link to="/dashboard" className="block px-3 py-2 rounded-md text-zinc-300 hover:text-white hover:bg-zinc-800" onClick={() => setIsOpen(false)}>
                 Dashboard
               </Link>
               {user.role === 'Creator' && (
-                <>
-                  <Link to="/applications" className="block px-3 py-2 rounded-md text-zinc-300 hover:text-white hover:bg-zinc-800" onClick={() => setIsOpen(false)}>
-                    Applications
-                  </Link>
-                  <Link to={`/creator/${user.id}`} className="block px-3 py-2 rounded-md text-zinc-300 hover:text-white hover:bg-zinc-800" onClick={() => setIsOpen(false)}>
-                    My Portfolio
-                  </Link>
-                </>
+                <Link to={`/creator/${user.id}`} className="block px-3 py-2 rounded-md text-zinc-300 hover:text-white hover:bg-zinc-800" onClick={() => setIsOpen(false)}>
+                  My Portfolio
+                </Link>
               )}
               <Link to="/settings" className="block px-3 py-2 rounded-md text-zinc-300 hover:text-white hover:bg-zinc-800" onClick={() => setIsOpen(false)}>
                 Settings
@@ -160,14 +212,22 @@ const Navbar = () => {
               </button>
             </>
           ) : (
-            <div className="pt-2 border-t border-zinc-800 flex flex-col gap-2">
-              <Link to="/login" className="block text-center px-4 py-2 rounded-md border border-zinc-700 text-zinc-300" onClick={() => setIsOpen(false)}>
-                Sign In
+            <>
+              <Link to="/explore-projects" className="block px-3 py-2 rounded-md text-zinc-300 hover:text-white hover:bg-zinc-800" onClick={() => setIsOpen(false)}>
+                Explore Projects
               </Link>
-              <Link to="/register" className="block text-center px-4 py-2 rounded-md bg-primary text-white" onClick={() => setIsOpen(false)}>
-                Register
+              <Link to="/explore-creators" className="block px-3 py-2 rounded-md text-zinc-300 hover:text-white hover:bg-zinc-800" onClick={() => setIsOpen(false)}>
+                Explore Creators
               </Link>
-            </div>
+              <div className="pt-2 border-t border-zinc-800 flex flex-col gap-2">
+                <Link to="/login" className="block text-center px-4 py-2 rounded-md border border-zinc-700 text-zinc-300" onClick={() => setIsOpen(false)}>
+                  Sign In
+                </Link>
+                <Link to="/register" className="block text-center px-4 py-2 rounded-md bg-primary text-white" onClick={() => setIsOpen(false)}>
+                  Register
+                </Link>
+              </div>
+            </>
           )}
         </div>
       )}

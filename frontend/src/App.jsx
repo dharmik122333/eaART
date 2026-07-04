@@ -14,6 +14,12 @@ import CreatorProfile from './pages/CreatorProfile';
 import ProjectDetails from './pages/ProjectDetails';
 import Applications from './pages/Applications';
 import Settings from './pages/Settings';
+import HomeFeed from './pages/HomeFeed';
+import Discover from './pages/Discover';
+import Messages from './pages/Messages';
+import Notifications from './pages/Notifications';
+import Communities from './pages/Communities';
+import Events from './pages/Events';
 
 // Protected Route Guard Component
 const ProtectedRoute = ({ children }) => {
@@ -48,6 +54,54 @@ function AppContent() {
         <Route path="/project/:id" element={<ProjectDetails />} />
 
         {/* Protected Routes */}
+        <Route 
+          path="/feed" 
+          element={
+            <ProtectedRoute>
+              <HomeFeed />
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/discover" 
+          element={
+            <ProtectedRoute>
+              <Discover />
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/messages" 
+          element={
+            <ProtectedRoute>
+              <Messages />
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/notifications" 
+          element={
+            <ProtectedRoute>
+              <Notifications />
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/communities" 
+          element={
+            <ProtectedRoute>
+              <Communities />
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/events" 
+          element={
+            <ProtectedRoute>
+              <Events />
+            </ProtectedRoute>
+          } 
+        />
         <Route 
           path="/dashboard" 
           element={

@@ -54,7 +54,7 @@ const Register = () => {
 
     try {
       await register(formData);
-      navigate('/dashboard');
+      navigate('/feed');
     } catch (err) {
       setLocalError(err.message || 'Registration failed. Try using a different email.');
     } finally {
