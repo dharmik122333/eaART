@@ -96,12 +96,6 @@ const Navbar = () => {
                   <LayoutDashboard className="w-4 h-4" />
                   <span>Dashboard</span>
                 </Link>
-                {user.role === 'Creator' && (
-                  <Link to={`/profile/${user.username || user.id}`} className={navLinkClass(`/profile/${user.username || user.id}`)}>
-                    <Briefcase className="w-4 h-4" />
-                    <span>My Portfolio</span>
-                  </Link>
-                )}
                 {user.isAdmin && (
                   <Link to="/admin" className={navLinkClass('/admin')}>
                     <Settings className="w-4 h-4" />
@@ -201,11 +195,6 @@ const Navbar = () => {
               <Link to="/dashboard" className="block px-3 py-2 rounded-md text-zinc-300 hover:text-white hover:bg-zinc-800" onClick={() => setIsOpen(false)}>
                 Dashboard
               </Link>
-              {user.role === 'Creator' && (
-                <Link to={`/profile/${user.username || user.id}`} className="block px-3 py-2 rounded-md text-zinc-300 hover:text-white hover:bg-zinc-800" onClick={() => setIsOpen(false)}>
-                  My Portfolio
-                </Link>
-              )}
               {user.isAdmin && (
                 <Link to="/admin" className="block px-3 py-2 rounded-md text-red-400 font-semibold hover:bg-zinc-800" onClick={() => setIsOpen(false)}>
                   Admin Panel
