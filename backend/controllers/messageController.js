@@ -227,10 +227,14 @@ exports.deleteConversation = async (req, res) => {
     const userId = req.user.id;
 
     if (isMongoConnected()) {
+      const mongoose = require('mongoose');
+      const userObjectId = new mongoose.Types.ObjectId(userId);
+      const recipientObjectId = new mongoose.Types.ObjectId(recipientId);
+
       await Message.deleteMany({
         $or: [
-          { senderId: userId, recipientId },
-          { senderId: recipientId, recipientId: userId }
+          { senderId: userObjectId, recipientId: recipientObjectId },
+          { senderId: recipientObjectId, recipientId: userObjectId }
         ]
       });
       return res.status(200).json({ success: true });
