@@ -5,7 +5,8 @@ import {
   Send, Image, MessageSquare, Compass, Eye, ShieldAlert, ArrowLeft,
   Pin, Trash2, Shield, MoreVertical, Paperclip, Smile, Search,
   AlertCircle, Check, CheckCheck, UserCheck, X, File, Film, Volume2, 
-  Download, Loader, ThumbsUp, Heart, Laugh, Flame, AlertOctagon, HelpCircle
+  Download, Loader, ThumbsUp, Heart, Laugh, Flame, Mic, StopCircle, 
+  LayoutGrid, AlertOctagon, HelpCircle
 } from 'lucide-react';
 
 const Messages = () => {
@@ -35,9 +36,21 @@ const Messages = () => {
   // Drag & drop status
   const [isDragging, setIsDragging] = useState(false);
 
-  // Modals / Viewers
+  // Voice Note Recording
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingDuration, setRecordingDuration] = useState(0);
+  const [mediaRecorder, setMediaRecorder] = useState(null);
+  const recordingIntervalRef = useRef(null);
+  const audioChunksRef = useRef([]);
+
+  // Modals / Viewers / Sidebars
   const [fullscreenImage, setFullscreenImage] = useState(null);
   const [showSecurityModal, setShowSecurityModal] = useState(false);
+  const [showMediaGallery, setShowMediaGallery] = useState(false);
+  
+  // Inside-chat Search
+  const [chatSearchOpen, setChatSearchOpen] = useState(false);
+  const [chatSearchQuery, setChatSearchQuery] = useState('');
 
   const [pinnedConvos, setPinnedConvos] = useState(() => {
     try {
@@ -201,6 +214,48 @@ const Messages = () => {
     }
   };
 
+  // Voice Note Recorder Start
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      audioChunksRef.current = [];
+
+      recorder.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) {
+          audioChunksRef.current.push(e.data);
+        }
+      };
+
+      recorder.onstop = async () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        const file = new File([audioBlob], `voice_note_${Date.now()}.webm`, { type: 'audio/webm' });
+        await uploadFile(file);
+      };
+
+      recorder.start();
+      setMediaRecorder(recorder);
+      setIsRecording(true);
+      setRecordingDuration(0);
+
+      recordingIntervalRef.current = setInterval(() => {
+        setRecordingDuration(prev => prev + 1);
+      }, 1000);
+    } catch (err) {
+      alert('Unable to access microphone for recording.');
+      console.error(err);
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorder && isRecording) {
+      mediaRecorder.stop();
+      mediaRecorder.stream.getTracks().forEach(track => track.stop());
+      setIsRecording(false);
+      clearInterval(recordingIntervalRef.current);
+    }
+  };
+
   // Upload file to Backend (which routes to Cloudinary or local fallback)
   const uploadFile = async (file) => {
     setUploading(true);
@@ -212,7 +267,6 @@ const Messages = () => {
     try {
       setUploadProgress(40);
       
-      // Simulate progress increment
       const progressTimer = setInterval(() => {
         setUploadProgress(p => (p < 90 ? p + 10 : p));
       }, 200);
@@ -253,7 +307,6 @@ const Messages = () => {
     if (file) uploadFile(file);
   };
 
-  // Drag & Drop Events
   const handleDragOver = (e) => {
     e.preventDefault();
     setIsDragging(true);
@@ -270,7 +323,6 @@ const Messages = () => {
     if (file) uploadFile(file);
   };
 
-  // Clipboard Paste Event
   const handlePaste = (e) => {
     const items = e.clipboardData?.items;
     if (!items) return;
@@ -285,24 +337,17 @@ const Messages = () => {
     }
   };
 
-  // Toggle Message Reaction
   const handleToggleReaction = async (msgId, emoji) => {
     try {
       const res = await api.post(`/api/messages/message/${msgId}/react`, { emoji });
       if (res.success) {
-        setMessages(prev => prev.map(m => {
-          if (m._id === msgId) {
-            return res.message || m;
-          }
-          return m;
-        }));
+        setMessages(prev => prev.map(m => m._id === msgId ? (res.message || m) : m));
       }
     } catch (err) {
       console.error(err);
     }
   };
 
-  // Send message
   const handleSendMessage = async (e) => {
     e.preventDefault();
     if (isBlocked) return alert('You cannot text a blocked user.');
@@ -331,7 +376,6 @@ const Messages = () => {
       if (res.success) {
         setMessages(prev => [...prev, res.message]);
         
-        // Mock automatic sync reply to make chat feel alive!
         setIsTyping(true);
         setTimeout(() => {
           setIsTyping(false);
@@ -357,7 +401,13 @@ const Messages = () => {
     setInputText(prev => prev + emoji);
   };
 
-  // Filters convos/users by query
+  const formatDuration = (sec) => {
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return `${m}:${s < 10 ? '0' : ''}${s}`;
+  };
+
+  // Filter conversations
   const filteredConvos = conversations.filter(c => 
     c.user && c.user.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
@@ -372,6 +422,17 @@ const Messages = () => {
     const bPinned = pinnedConvos.includes(b.user?._id) ? 1 : 0;
     return bPinned - aPinned;
   });
+
+  // Filter messages in active conversation by search keyword
+  const filteredMessages = messages.filter(m => {
+    if (!chatSearchQuery.trim()) return true;
+    return m.text && m.text.toLowerCase().includes(chatSearchQuery.toLowerCase());
+  });
+
+  // Extract shared media gallery items
+  const mediaGalleryItems = messages.filter(m => 
+    !m.deletedForEveryone && m.media && (m.fileType === 'image' || m.fileType === 'video')
+  );
 
   const emojis = ['👍', '❤️', '🔥', '😂', '😮', '🎉', '💡', '🎨', '💼'];
 
@@ -554,8 +615,8 @@ const Messages = () => {
           </div>
         </div>
 
-        {/* RIGHT SIDE BAR: Chat message box */}
-        <div className={`flex-1 flex flex-col h-full bg-zinc-950/30 ${!activeChat ? 'hidden md:flex justify-center items-center' : 'flex'}`}>
+        {/* MID SECTION: Chat message viewport */}
+        <div className={`flex-grow flex flex-col h-full bg-zinc-950/30 ${!activeChat ? 'hidden md:flex justify-center items-center' : 'flex'}`}>
           {activeChat ? (
             <>
               {/* Header Box */}
@@ -589,39 +650,81 @@ const Messages = () => {
                   </div>
                 </div>
 
-                <div className="relative">
+                <div className="flex items-center gap-1">
+                  {/* Inside-chat Search Toggle */}
                   <button 
-                    onClick={() => setShowHeaderMenu(!showHeaderMenu)}
-                    className="p-2 text-zinc-400 hover:text-white rounded-lg hover:bg-zinc-900 transition"
+                    onClick={() => setChatSearchOpen(!chatSearchOpen)}
+                    className={`p-2 rounded-lg transition ${chatSearchOpen ? 'bg-primary/20 text-primary-glow' : 'text-zinc-400 hover:text-white hover:bg-zinc-900'}`}
+                    title="Search messages"
                   >
-                    <MoreVertical className="w-4 h-4" />
+                    <Search className="w-4 h-4" />
                   </button>
-                  
-                  {showHeaderMenu && (
-                    <div className="absolute right-0 top-10 w-44 bg-zinc-950 border border-zinc-900 rounded-xl p-1 shadow-xl z-20 space-y-1">
-                      <button 
-                        onClick={handleBlockUser}
-                        className="w-full text-left px-3 py-2 rounded-lg text-xs font-semibold text-zinc-300 hover:bg-zinc-900 hover:text-red-450 transition"
-                      >
-                        {isBlocked ? 'Unblock User' : 'Block User'}
-                      </button>
-                      <button 
-                        onClick={handleReportUser}
-                        className="w-full text-left px-3 py-2 rounded-lg text-xs font-semibold text-zinc-300 hover:bg-zinc-900 hover:text-yellow-450 transition"
-                      >
-                        Report User
-                      </button>
-                      <button 
-                        onClick={handleDeleteConversation}
-                        className="w-full text-left px-3 py-2 rounded-lg text-xs font-semibold text-red-500 hover:bg-red-500/10 transition flex items-center gap-2"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                        <span>Clear History</span>
-                      </button>
-                    </div>
-                  )}
+
+                  {/* Collapsible Shared Media Gallery Toggle */}
+                  <button 
+                    onClick={() => setShowMediaGallery(!showMediaGallery)}
+                    className={`p-2 rounded-lg transition ${showMediaGallery ? 'bg-primary/20 text-primary-glow' : 'text-zinc-400 hover:text-white hover:bg-zinc-900'}`}
+                    title="Shared Gallery"
+                  >
+                    <LayoutGrid className="w-4 h-4" />
+                  </button>
+
+                  <div className="relative">
+                    <button 
+                      onClick={() => setShowHeaderMenu(!showHeaderMenu)}
+                      className="p-2 text-zinc-400 hover:text-white rounded-lg hover:bg-zinc-900 transition"
+                    >
+                      <MoreVertical className="w-4 h-4" />
+                    </button>
+                    
+                    {showHeaderMenu && (
+                      <div className="absolute right-0 top-10 w-44 bg-zinc-950 border border-zinc-900 rounded-xl p-1 shadow-xl z-20 space-y-1">
+                        <button 
+                          onClick={handleBlockUser}
+                          className="w-full text-left px-3 py-2 rounded-lg text-xs font-semibold text-zinc-300 hover:bg-zinc-900 hover:text-red-450 transition"
+                        >
+                          {isBlocked ? 'Unblock User' : 'Block User'}
+                        </button>
+                        <button 
+                          onClick={handleReportUser}
+                          className="w-full text-left px-3 py-2 rounded-lg text-xs font-semibold text-zinc-300 hover:bg-zinc-900 hover:text-yellow-450 transition"
+                        >
+                          Report User
+                        </button>
+                        <button 
+                          onClick={handleDeleteConversation}
+                          className="w-full text-left px-3 py-2 rounded-lg text-xs font-semibold text-red-500 hover:bg-red-500/10 transition flex items-center gap-2"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>Clear History</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
+
+              {/* Collapsible inside-chat keyword search input bar */}
+              {chatSearchOpen && (
+                <div className="px-4 py-2 bg-zinc-950 border-b border-zinc-900 flex items-center justify-between">
+                  <div className="relative flex-grow mr-2">
+                    <input 
+                      type="text"
+                      placeholder="Search message history..."
+                      value={chatSearchQuery}
+                      onChange={(e) => setChatSearchQuery(e.target.value)}
+                      className="w-full bg-zinc-900 border border-zinc-800 rounded-lg pl-8 pr-2.5 py-1 text-xs outline-none text-white focus:border-zinc-700"
+                    />
+                    <Search className="w-3.5 h-3.5 text-zinc-500 absolute left-2.5 top-2" />
+                  </div>
+                  <button 
+                    onClick={() => { setChatSearchQuery(''); setChatSearchOpen(false); }}
+                    className="text-zinc-500 hover:text-white"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
 
               {/* Message thread viewport */}
               <div className="flex-1 p-4 overflow-y-auto no-scrollbar space-y-4 bg-zinc-950/20">
@@ -631,7 +734,7 @@ const Messages = () => {
                   </div>
                 ) : (
                   <>
-                    {messages.map(msg => {
+                    {filteredMessages.map(msg => {
                       const isMe = (msg.senderId?._id || msg.senderId) === user?.id;
                       const hasAttachment = msg.media && msg.fileName;
 
@@ -639,7 +742,7 @@ const Messages = () => {
                         <div key={msg._id} className={`flex ${isMe ? 'justify-end' : 'justify-start'} group relative`}>
                           <div className="max-w-[70%] space-y-1 relative">
                             
-                            {/* Message Reaction Hover Bar (Only show if not deleted) */}
+                            {/* Message Reaction Hover Bar */}
                             {!msg.deletedForEveryone && (
                               <div className={`absolute -top-7 z-10 flex gap-1 p-1 bg-zinc-900 border border-zinc-800 rounded-lg opacity-0 group-hover:opacity-100 transition-all ${
                                 isMe ? 'right-2' : 'left-2'
@@ -673,7 +776,10 @@ const Messages = () => {
                                   ) : msg.fileType === 'video' ? (
                                     <video src={msg.media} controls className="max-h-40 w-full rounded object-contain" />
                                   ) : msg.fileType === 'audio' ? (
-                                    <audio src={msg.media} controls className="w-full h-8" />
+                                    <div className="flex flex-col space-y-1">
+                                      <span className="text-[8px] text-zinc-400 uppercase tracking-wider font-bold">Voice Note</span>
+                                      <audio src={msg.media} controls className="w-full h-8" />
+                                    </div>
                                   ) : (
                                     <div className="flex items-center justify-between gap-3 bg-zinc-950 p-2 rounded border border-zinc-800">
                                       <div className="flex items-center gap-2 overflow-hidden">
@@ -715,13 +821,17 @@ const Messages = () => {
                                 </div>
                               )}
 
+                              {/* Seen / Delivered Status indicators */}
                               <div className="flex items-center justify-end gap-1.5 mt-1 text-[8px] text-zinc-400 font-mono">
                                 <span>
                                   {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                 </span>
                                 {isMe && (
                                   <span>
-                                    {msg.isRead ? <CheckCheck className="w-3 h-3 text-primary-glow" /> : <Check className="w-3 h-3" />}
+                                    {msg.isRead 
+                                      ? <CheckCheck className="w-3.5 h-3.5 text-primary-glow font-bold" /> 
+                                      : <Check className="w-3.5 h-3.5" />
+                                    }
                                   </span>
                                 )}
                               </div>
@@ -744,7 +854,7 @@ const Messages = () => {
 
                     {isTyping && (
                       <div className="flex justify-start">
-                        <div className="bg-zinc-900/80 text-zinc-400 rounded-2xl rounded-tl-none px-4 py-2 text-xs flex items-center gap-1.5 border border-zinc-850">
+                        <div className="bg-zinc-900/80 text-zinc-400 rounded-2xl rounded-tl-none px-4 py-2 text-xs flex items-center gap-1.5 border border-zinc-855">
                           <span className="font-semibold text-zinc-350">{activeChat.name} is typing</span>
                           <span className="animate-pulse">...</span>
                         </div>
@@ -757,11 +867,11 @@ const Messages = () => {
 
               {/* Bottom attachment details preview */}
               {attachment && (
-                <div className="px-4 py-2 bg-zinc-900 border-t border-zinc-800 flex justify-between items-center text-xs">
+                <div className="px-4 py-2 bg-zinc-900 border-t border-zinc-805 flex justify-between items-center text-xs">
                   <div className="flex items-center gap-2 text-zinc-300">
                     <Paperclip className="w-3.5 h-3.5 text-primary-glow animate-pulse" />
                     <span className="truncate max-w-[200px] font-mono text-[10px]">{attachment.name}</span>
-                    <span className="text-[8px] bg-primary/20 text-primary-glow border border-primary/20 px-1 rounded uppercase font-bold tracking-wider">Ready to send</span>
+                    <span className="text-[8px] bg-primary/20 text-primary-glow border border-primary/20 px-1 rounded uppercase font-bold tracking-wider">Ready</span>
                   </div>
                   <button onClick={() => setAttachment(null)} className="text-zinc-500 hover:text-white">
                     <X className="w-3.5 h-3.5" />
@@ -772,11 +882,29 @@ const Messages = () => {
               {/* Upload Progress Loader Bar */}
               {uploading && (
                 <div className="px-4 py-2 bg-zinc-950 border-t border-zinc-900 flex items-center justify-between text-xs gap-3">
-                  <div className="flex items-center gap-2 text-zinc-400">
+                  <div className="flex items-center gap-2 text-zinc-450">
                     <Loader className="w-3.5 h-3.5 text-primary-glow animate-spin" />
-                    <span>Uploading file to secure Cloudinary server...</span>
+                    <span>Uploading file to secure Cloudinary...</span>
                   </div>
                   <span className="font-mono font-bold text-primary-glow">{uploadProgress}%</span>
+                </div>
+              )}
+
+              {/* Voice recording indicators */}
+              {isRecording && (
+                <div className="px-4 py-2 bg-zinc-900 border-t border-zinc-800 flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-3 text-red-400">
+                    <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-ping" />
+                    <span className="font-bold">Recording Voice Note...</span>
+                    <span className="font-mono font-semibold">{formatDuration(recordingDuration)}</span>
+                  </div>
+                  <button 
+                    onClick={stopRecording} 
+                    className="p-1 rounded bg-zinc-850 hover:bg-zinc-800 text-red-500 hover:text-red-450 flex items-center gap-1.5 font-bold"
+                  >
+                    <StopCircle className="w-4 h-4" />
+                    <span>Stop & Attach</span>
+                  </button>
                 </div>
               )}
 
@@ -809,8 +937,8 @@ const Messages = () => {
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
                   className="p-2 text-zinc-400 hover:text-white rounded-lg hover:bg-zinc-900 transition"
-                  title="Attach images, videos, audio, PDF, DOCX, ZIP"
-                  disabled={uploading}
+                  title="Attach files (PDF, DOCX, ZIP, MP4, etc.)"
+                  disabled={uploading || isRecording}
                 >
                   <Paperclip className="w-4 h-4" />
                 </button>
@@ -820,8 +948,20 @@ const Messages = () => {
                   onClick={() => setShowEmojiPicker(!showEmojiPicker)}
                   className="p-2 text-zinc-400 hover:text-white rounded-lg hover:bg-zinc-900 transition"
                   title="Insert emoji"
+                  disabled={isRecording}
                 >
                   <Smile className="w-4 h-4" />
+                </button>
+
+                {/* Voice Note Recorder Button */}
+                <button
+                  type="button"
+                  onClick={startRecording}
+                  className={`p-2 rounded-lg transition ${isRecording ? 'text-red-500 bg-red-500/10' : 'text-zinc-400 hover:text-white hover:bg-zinc-900'}`}
+                  title="Record voice note"
+                  disabled={uploading || isRecording}
+                >
+                  <Mic className="w-4 h-4" />
                 </button>
 
                 <input
@@ -831,12 +971,12 @@ const Messages = () => {
                   onChange={(e) => setInputText(e.target.value)}
                   onPaste={handlePaste}
                   className="flex-1 bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2 text-xs outline-none text-white placeholder-zinc-500 focus:border-zinc-700 transition"
-                  disabled={isBlocked || uploading}
+                  disabled={isBlocked || uploading || isRecording}
                 />
 
                 <button
                   type="submit"
-                  disabled={isBlocked || uploading}
+                  disabled={isBlocked || uploading || isRecording}
                   className="p-2.5 rounded-xl bg-primary hover:bg-primary-hover text-white transition disabled:opacity-50"
                 >
                   <Send className="w-4 h-4" />
@@ -845,7 +985,7 @@ const Messages = () => {
             </>
           ) : (
             <div className="text-center text-zinc-500 p-8 space-y-2">
-              <MessageSquare className="w-10 h-10 mx-auto text-zinc-700 animate-pulse" />
+              <MessageSquare className="w-10 h-10 mx-auto text-zinc-750 animate-pulse" />
               <h3 className="text-sm font-bold text-white">Select a Chat to Start</h3>
               <p className="text-xs text-zinc-450 leading-relaxed max-w-sm mx-auto">
                 Select from active chats in the sidebar, or search all registered creators in the 'Find Users' tab to start texting!
@@ -853,6 +993,50 @@ const Messages = () => {
             </div>
           )}
         </div>
+
+        {/* COLLAPSIBLE RIGHT SIDE BAR: Shared Media Gallery */}
+        {activeChat && showMediaGallery && (
+          <div className="w-60 border-l border-zinc-900 bg-zinc-950 p-4 flex flex-col h-full animate-slideIn">
+            <div className="flex items-center justify-between border-b border-zinc-900 pb-3 mb-3">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-450 flex items-center gap-1.5">
+                <LayoutGrid className="w-3.5 h-3.5 text-primary-glow" />
+                <span>Shared Gallery</span>
+              </h3>
+              <button 
+                onClick={() => setShowMediaGallery(false)}
+                className="text-zinc-500 hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto no-scrollbar space-y-2">
+              {mediaGalleryItems.length === 0 ? (
+                <div className="text-center text-zinc-650 text-[10px] pt-8">
+                  <span>No media shared in this conversation yet.</span>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-2">
+                  {mediaGalleryItems.map(item => (
+                    <div 
+                      key={item._id} 
+                      className="relative aspect-square bg-zinc-900 border border-zinc-800 rounded overflow-hidden cursor-pointer hover:border-primary-glow transition"
+                      onClick={() => setFullscreenImage(item.media)}
+                    >
+                      {item.fileType === 'image' ? (
+                        <img src={item.media} alt="Shared" className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center bg-zinc-900">
+                          <Film className="w-5 h-5 text-primary-glow" />
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
       </div>
 
