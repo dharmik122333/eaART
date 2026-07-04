@@ -1016,6 +1016,23 @@ module.exports = {
         return user;
       }
       return null;
+    },
+
+    toggleReaction: (msgId, userId, emoji) => {
+      const db = readData();
+      const idx = db.messages.findIndex(m => m._id === msgId);
+      if (idx !== -1) {
+        if (!db.messages[idx].reactions) db.messages[idx].reactions = [];
+        const existsIdx = db.messages[idx].reactions.findIndex(r => r.userId === userId && r.emoji === emoji);
+        if (existsIdx !== -1) {
+          db.messages[idx].reactions.splice(existsIdx, 1);
+        } else {
+          db.messages[idx].reactions.push({ userId, emoji });
+        }
+        writeData(db);
+        return db.messages[idx];
+      }
+      return null;
     }
   }
 };

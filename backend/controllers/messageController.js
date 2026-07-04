@@ -242,3 +242,79 @@ exports.deleteConversation = async (req, res) => {
     res.status(500).json({ success: false, error: error.message });
   }
 };
+
+// @desc    Upload message media attachment
+// @route   POST /api/messages/upload
+// @access  Private
+exports.uploadMessageMedia = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ success: false, error: 'No media file provided' });
+    }
+
+    const { uploadMedia } = require('../utils/cloudinaryHelper');
+    const uploadResult = await uploadMedia(req.file.path, 'messages');
+
+    // Parse file type
+    const ext = path.extname(req.file.originalname).toLowerCase().replace('.', '');
+    let fileType = 'document';
+    if (['jpg', 'jpeg', 'png', 'webp', 'gif'].includes(ext)) {
+      fileType = 'image';
+    } else if (['mp4', 'mov', 'webm'].includes(ext)) {
+      fileType = 'video';
+    } else if (['mp3', 'wav', 'ogg'].includes(ext)) {
+      fileType = 'audio';
+    }
+
+    return res.status(200).json({
+      success: true,
+      url: uploadResult.url,
+      fileName: req.file.originalname,
+      fileType: fileType
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+// @desc    Toggle reaction on a message
+// @route   POST /api/messages/message/:id/react
+// @access  Private
+exports.toggleMessageReaction = async (req, res) => {
+  try {
+    const msgId = req.params.id;
+    const { emoji } = req.body;
+    const userId = req.user.id;
+
+    if (!emoji) {
+      return res.status(400).json({ success: false, error: 'Emoji is required' });
+    }
+
+    if (isMongoConnected()) {
+      const message = await Message.findById(msgId);
+      if (!message) return res.status(404).json({ success: false, error: 'Message not found' });
+
+      // Find if reaction already exists
+      const existingIdx = message.reactions.findIndex(
+        r => r.userId.toString() === userId && r.emoji === emoji
+      );
+
+      if (existingIdx !== -1) {
+        // Toggle off
+        message.reactions.splice(existingIdx, 1);
+      } else {
+        // Add new
+        message.reactions.push({ userId, emoji });
+      }
+
+      await message.save();
+      return res.status(200).json({ success: true, message });
+    } else {
+      const message = fallbackDb.toggleReaction(msgId, userId, emoji);
+      if (!message) return res.status(404).json({ success: false, error: 'Message not found' });
+      return res.status(200).json({ success: true, message });
+    }
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
