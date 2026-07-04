@@ -1,4 +1,6 @@
 const User = require('../models/User');
+const Post = require('../models/Post');
+const Project = require('../models/Project');
 const { uploadMedia } = require('../utils/cloudinaryHelper');
 const { isMongoConnected, fallbackDb } = require('../utils/dbFallback');
 
@@ -9,7 +11,8 @@ exports.updateProfile = async (req, res) => {
   try {
     const fieldsToUpdate = {};
     const allowedFields = [
-      'name', 'bio', 'location', 'availability', 'organization'
+      'name', 'bio', 'location', 'availability', 'organization', 
+      'coverBanner', 'headline', 'industry', 'experience', 'education', 'achievements'
     ];
 
     allowedFields.forEach((field) => {
@@ -18,7 +21,40 @@ exports.updateProfile = async (req, res) => {
       }
     });
 
-    // Special handling for array and selection fields for Creators
+    // Handle password updating & hashing
+    if (req.body.password !== undefined && req.body.password !== '') {
+      const bcrypt = require('bcryptjs');
+      const salt = await bcrypt.genSalt(10);
+      fieldsToUpdate.password = await bcrypt.hash(req.body.password, salt);
+    }
+
+    // Enforce username change check
+    if (req.body.username !== undefined) {
+      const cleanUsername = req.body.username.startsWith('@') ? req.body.username.substring(1) : req.body.username;
+      const usernameRegex = /^[a-zA-Z0-9_]+$/;
+      if (!usernameRegex.test(cleanUsername)) {
+        return res.status(400).json({ success: false, error: 'Usernames can only contain letters, numbers, and underscores' });
+      }
+
+      const requestedUsername = cleanUsername.toLowerCase();
+      
+      // If they changed it
+      if (requestedUsername !== req.user.username) {
+        if (isMongoConnected()) {
+          const taken = await User.findOne({ username: requestedUsername });
+          if (taken) {
+            return res.status(400).json({ success: false, error: 'Username handle is already taken' });
+          }
+        } else {
+          const taken = fallbackDb.findUserByUsername(requestedUsername);
+          if (taken) {
+            return res.status(400).json({ success: false, error: 'Username handle is already taken' });
+          }
+        }
+        fieldsToUpdate.username = requestedUsername;
+      }
+    }
+
     if (req.user.role === 'Creator') {
       if (req.body.skills) {
         fieldsToUpdate.skills = Array.isArray(req.body.skills)
@@ -58,7 +94,6 @@ exports.uploadProfileImage = async (req, res) => {
       return res.status(400).json({ success: false, error: 'Please upload an image file' });
     }
 
-    // Upload to Cloudinary or serve local URL
     const uploadResult = await uploadMedia(req.file.path, 'profiles');
 
     if (isMongoConnected()) {
@@ -85,7 +120,7 @@ exports.uploadProfileImage = async (req, res) => {
   }
 };
 
-// @desc    Get all creators (with filters)
+// @desc    Get all creators
 // @route   GET /api/users/creators
 // @access  Public
 exports.getCreators = async (req, res) => {
@@ -99,6 +134,7 @@ exports.getCreators = async (req, res) => {
       if (search) {
         query.$or = [
           { name: { $regex: search, $options: 'i' } },
+          { username: { $regex: search, $options: 'i' } },
           { bio: { $regex: search, $options: 'i' } },
           { location: { $regex: search, $options: 'i' } }
         ];
@@ -144,6 +180,158 @@ exports.getCreatorById = async (req, res) => {
         return res.status(404).json({ success: false, error: 'Creator not found' });
       }
       return res.status(200).json({ success: true, creator });
+    }
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+// @desc    Get single user details by username (Creator or Recruiter)
+// @route   GET /api/users/profile/:username
+// @access  Public
+exports.getUserByUsername = async (req, res) => {
+  try {
+    const { username } = req.params;
+    const cleanUsername = username.startsWith('@') ? username.substring(1) : username;
+
+    if (isMongoConnected()) {
+      const creator = await User.findOneAndUpdate(
+        { username: cleanUsername.toLowerCase() },
+        { $inc: { profileViews: 1 } },
+        { new: true }
+      );
+      
+      if (!creator) {
+        return res.status(404).json({ success: false, error: 'User not found' });
+      }
+      return res.status(200).json({ success: true, creator });
+    } else {
+      const creator = fallbackDb.findUserByUsername(cleanUsername);
+      if (!creator) {
+        return res.status(404).json({ success: false, error: 'User not found' });
+      }
+      
+      // Increment views count offline
+      const views = (creator.profileViews || 0) + 1;
+      fallbackDb.updateUser(creator._id, { profileViews: views });
+      creator.profileViews = views;
+
+      return res.status(200).json({ success: true, creator });
+    }
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+// @desc    Delete account
+// @route   DELETE /api/users/profile
+// @access  Private
+exports.deleteAccount = async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    if (isMongoConnected()) {
+      await User.findByIdAndDelete(userId);
+      await Post.deleteMany({ authorId: userId });
+      await Project.deleteMany({ recruiterId: userId });
+      return res.status(200).json({ success: true, data: {} });
+    } else {
+      fallbackDb.deleteUser(userId);
+      return res.status(200).json({ success: true, data: {} });
+    }
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+// @desc    Deactivate account
+// @route   PUT /api/users/deactivate
+// @access  Private
+exports.deactivateAccount = async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    if (isMongoConnected()) {
+      await User.findByIdAndUpdate(userId, { availability: false, bio: '[Deactivated Account]' });
+      return res.status(200).json({ success: true });
+    } else {
+      fallbackDb.updateUser(userId, { availability: false, bio: '[Deactivated Account]' });
+      return res.status(200).json({ success: true });
+    }
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+// ==========================================
+// --- Admin Moderation Panel Endpoints ---
+// ==========================================
+
+// @desc    Get all users for Admin
+// @route   GET /api/users/admin/all
+// @access  Private/Admin
+exports.adminGetAllUsers = async (req, res) => {
+  try {
+    if (!req.user.isAdmin) {
+      return res.status(403).json({ success: false, error: 'Unauthorized Administrative action' });
+    }
+
+    if (isMongoConnected()) {
+      const users = await User.find().sort({ createdAt: -1 });
+      return res.status(200).json({ success: true, count: users.length, users });
+    } else {
+      const db = require('../utils/dbFallback').readData = () => {
+        const raw = require('fs').readFileSync(require('path').join(__dirname, '../data/db.json'), 'utf8');
+        return JSON.parse(raw);
+      };
+      const users = fallbackDb.findUsers({});
+      return res.status(200).json({ success: true, count: users.length, users });
+    }
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+// @desc    Admin Delete User
+// @route   DELETE /api/users/admin/user/:id
+// @access  Private/Admin
+exports.adminDeleteUser = async (req, res) => {
+  try {
+    if (!req.user.isAdmin) {
+      return res.status(403).json({ success: false, error: 'Unauthorized Administrative action' });
+    }
+
+    const userId = req.params.id;
+    if (isMongoConnected()) {
+      await User.findByIdAndDelete(userId);
+      await Post.deleteMany({ authorId: userId });
+      await Project.deleteMany({ recruiterId: userId });
+      return res.status(200).json({ success: true, data: {} });
+    } else {
+      fallbackDb.deleteUser(userId);
+      return res.status(200).json({ success: true, data: {} });
+    }
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+// @desc    Admin Delete Post
+// @route   DELETE /api/users/admin/post/:id
+// @access  Private/Admin
+exports.adminDeletePost = async (req, res) => {
+  try {
+    if (!req.user.isAdmin) {
+      return res.status(403).json({ success: false, error: 'Unauthorized Administrative action' });
+    }
+
+    const postId = req.params.id;
+    if (isMongoConnected()) {
+      await Post.findByIdAndDelete(postId);
+      return res.status(200).json({ success: true, data: {} });
+    } else {
+      fallbackDb.deletePost(postId);
+      return res.status(200).json({ success: true, data: {} });
     }
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });

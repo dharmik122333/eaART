@@ -7,6 +7,14 @@ const UserSchema = new mongoose.Schema({
     required: [true, 'Please add a name'],
     trim: true,
   },
+  username: {
+    type: String,
+    required: [true, 'Please add a username'],
+    unique: true,
+    trim: true,
+    lowercase: true,
+    match: [/^[a-zA-Z0-9_]+$/, 'Please add a valid username without spaces or special characters'],
+  },
   email: {
     type: String,
     required: [true, 'Please add an email'],
@@ -117,6 +125,18 @@ const UserSchema = new mongoose.Schema({
   portfolioViews: {
     type: Number,
     default: 0
+  },
+  emailVerified: {
+    type: Boolean,
+    default: false,
+  },
+  emailVerificationToken: String,
+  passwordResetToken: String,
+  passwordResetExpires: Date,
+  refreshToken: String,
+  isAdmin: {
+    type: Boolean,
+    default: false,
   },
   createdAt: {
     type: Date,

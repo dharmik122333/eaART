@@ -189,10 +189,21 @@ module.exports = {
       return db.users.find(u => u.email.toLowerCase() === email.toLowerCase());
     },
 
+    findUserByUsername: (username) => {
+      const db = readData();
+      if (!username) return null;
+      const cleanUsername = username.startsWith('@') ? username.substring(1) : username;
+      return db.users.find(u => u.username && u.username.toLowerCase() === cleanUsername.toLowerCase());
+    },
+
     createUser: (userData) => {
       const db = readData();
+      const defaultUsername = userData.username || 
+        (userData.name ? userData.name.toLowerCase().replace(/[^a-z0-9]/g, '') : 'user') + '_' + Date.now().toString().slice(-4);
+      
       const newUser = {
         _id: 'user_' + Date.now(),
+        username: defaultUsername.startsWith('@') ? defaultUsername.substring(1) : defaultUsername,
         coverBanner: '',
         headline: '',
         industry: '',
@@ -201,12 +212,26 @@ module.exports = {
         achievements: [],
         profileViews: 0,
         portfolioViews: 0,
+        emailVerified: false,
+        isAdmin: false,
         ...userData,
         createdAt: new Date().toISOString()
       };
       db.users.push(newUser);
       writeData(db);
       return newUser;
+    },
+
+    deleteUser: (id) => {
+      const db = readData();
+      db.users = db.users.filter(u => u._id !== id);
+      db.projects = db.projects.filter(p => p.recruiterId !== id);
+      db.applications = db.applications.filter(a => a.creatorId !== id);
+      db.posts = db.posts.filter(p => p.authorId !== id);
+      db.comments = db.comments.filter(c => c.authorId !== id);
+      db.likes = db.likes.filter(l => l.userId !== id);
+      writeData(db);
+      return true;
     },
 
     updateUser: (id, updateFields) => {

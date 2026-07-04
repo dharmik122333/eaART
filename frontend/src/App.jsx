@@ -20,6 +20,9 @@ import Messages from './pages/Messages';
 import Notifications from './pages/Notifications';
 import Communities from './pages/Communities';
 import Events from './pages/Events';
+import AdminPanel from './pages/AdminPanel';
+import ForgotPassword from './pages/ForgotPassword';
+import ResetPassword from './pages/ResetPassword';
 
 // Protected Route Guard Component
 const ProtectedRoute = ({ children }) => {
@@ -48,9 +51,12 @@ function AppContent() {
         <Route path="/" element={<LandingPage />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/explore-creators" element={<ExploreCreators />} />
         <Route path="/explore-projects" element={<ExploreProjects />} />
-        <Route path="/creator/:id" element={<CreatorProfile />} />
+        <Route path="/creator/:id" element={<CreatorProfile />} /> {/* Keep for backwards compatibility */}
+        <Route path="/profile/:username" element={<CreatorProfile />} />
         <Route path="/project/:id" element={<ProjectDetails />} />
 
         {/* Protected Routes */}
@@ -123,6 +129,14 @@ function AppContent() {
           element={
             <ProtectedRoute>
               <Settings />
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/admin" 
+          element={
+            <ProtectedRoute>
+              <AdminPanel />
             </ProtectedRoute>
           } 
         />

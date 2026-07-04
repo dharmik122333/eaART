@@ -135,3 +135,84 @@ exports.addReply = async (req, res) => {
     res.status(500).json({ success: false, error: error.message });
   }
 };
+
+// @desc    Like a comment
+// @route   POST /api/comments/:id/like
+// @access  Private
+exports.likeComment = async (req, res) => {
+  try {
+    const commentId = req.params.id;
+    const userId = req.user.id;
+    if (isMongoConnected()) {
+      const comment = await Comment.findById(commentId);
+      if (!comment) return res.status(404).json({ success: false, error: 'Comment not found' });
+      const alreadyLiked = comment.likes.includes(userId);
+      if (alreadyLiked) {
+        comment.likes = comment.likes.filter(id => id.toString() !== userId);
+      } else {
+        comment.likes.push(userId);
+      }
+      await comment.save();
+      return res.status(200).json({ success: true, likes: comment.likes });
+    } else {
+      const comment = fallbackDb.findCommentById(commentId);
+      if (!comment) return res.status(404).json({ success: false, error: 'Comment not found' });
+      if (!comment.likes) comment.likes = [];
+      const alreadyLiked = comment.likes.includes(userId);
+      if (alreadyLiked) {
+        comment.likes = comment.likes.filter(id => id !== userId);
+      } else {
+        comment.likes.push(userId);
+      }
+      fallbackDb.updateComment(commentId, { likes: comment.likes });
+      return res.status(200).json({ success: true, likes: comment.likes });
+    }
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+// @desc    Delete a comment
+// @route   DELETE /api/comments/:id
+// @access  Private
+exports.deleteComment = async (req, res) => {
+  try {
+    const commentId = req.params.id;
+    const userId = req.user.id;
+    if (isMongoConnected()) {
+      const comment = await Comment.findById(commentId);
+      if (!comment) return res.status(404).json({ success: false, error: 'Comment not found' });
+      if (comment.authorId.toString() !== userId && !req.user.isAdmin) {
+        return res.status(403).json({ success: false, error: 'Not authorized to delete this comment' });
+      }
+      const post = await Post.findById(comment.postId);
+      if (post) {
+        post.commentsCount = Math.max(0, post.commentsCount - 1);
+        await post.save();
+      }
+      await comment.deleteOne();
+      return res.status(200).json({ success: true, data: {} });
+    } else {
+      const comment = fallbackDb.findCommentById(commentId);
+      if (!comment) return res.status(404).json({ success: false, error: 'Comment not found' });
+      const authId = comment.authorId?._id || comment.authorId;
+      if (authId !== userId && !req.user.isAdmin) {
+        return res.status(403).json({ success: false, error: 'Not authorized to delete this comment' });
+      }
+      const post = fallbackDb.findPostById(comment.postId);
+      if (post) {
+        fallbackDb.updatePost(comment.postId, { commentsCount: Math.max(0, (post.commentsCount || 0) - 1) });
+      }
+      
+      const dbPath = require('path').join(__dirname, '../data/db.json');
+      const fs = require('fs');
+      const data = JSON.parse(fs.readFileSync(dbPath, 'utf8'));
+      data.comments = data.comments.filter(c => c._id !== commentId);
+      fs.writeFileSync(dbPath, JSON.stringify(data, null, 2));
+
+      return res.status(200).json({ success: true, data: {} });
+    }
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};

@@ -11,14 +11,13 @@ import {
 } from 'lucide-react';
 
 const CreatorProfile = () => {
-  const { id } = useParams();
+  const { username, id } = useParams();
   const { user } = useAuth();
   const navigate = useNavigate();
   
-  const isOwner = user && user.id === id;
-
   // Profile states
   const [profile, setProfile] = useState(null);
+  const isOwner = user && profile && (user.id === profile._id || user.id === profile.id || user._id === profile._id || user.username === profile.username);
   const [portfolio, setPortfolio] = useState([]);
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -62,26 +61,42 @@ const CreatorProfile = () => {
     setLoading(true);
     setError('');
     try {
-      // 1. Fetch Creator Profile
-      const userRes = await api.get(`/api/users/creators/${id}`);
-      if (userRes.success) {
-        setProfile(userRes.creator);
+      let activeUser;
+      
+      // 1. Fetch Profile
+      if (username) {
+        const userRes = await api.get(`/api/users/profile/${username}`);
+        if (userRes.success) {
+          activeUser = userRes.creator;
+        }
+      } else {
+        const userRes = await api.get(`/api/users/creators/${id}`);
+        if (userRes.success) {
+          activeUser = userRes.creator;
+        }
       }
 
+      if (!activeUser) {
+        throw new Error('User profile not found');
+      }
+
+      setProfile(activeUser);
+      const profileId = activeUser._id || activeUser.id;
+
       // 2. Fetch Portfolio items
-      const portRes = await api.get(`/api/portfolios/creator/${id}`);
+      const portRes = await api.get(`/api/portfolios/creator/${profileId}`);
       if (portRes.success) {
         setPortfolio(portRes.portfolioItems || []);
       }
 
       // 3. Fetch Creator Posts
-      const postsRes = await api.get(`/api/posts?authorId=${id}`);
+      const postsRes = await api.get(`/api/posts?authorId=${profileId}`);
       if (postsRes.success) {
         setPosts(postsRes.posts || []);
       }
 
       // 4. Fetch followers list
-      const followersRes = await api.get(`/api/follow/${id}/followers`);
+      const followersRes = await api.get(`/api/follow/${profileId}/followers`);
       if (followersRes.success) {
         setFollowers(followersRes.followers || []);
         if (user) {
@@ -90,7 +105,7 @@ const CreatorProfile = () => {
       }
 
       // 5. Fetch following list
-      const followingRes = await api.get(`/api/follow/${id}/following`);
+      const followingRes = await api.get(`/api/follow/${profileId}/following`);
       if (followingRes.success) {
         setFollowing(followingRes.following || []);
       }
@@ -121,13 +136,14 @@ const CreatorProfile = () => {
     if (user && user.role === 'Recruiter') {
       fetchRecruiterProjects();
     }
-  }, [id, user]);
+  }, [id, username, user]);
 
   // Handle Follow creator
   const handleFollowToggle = async () => {
     if (!user) return navigate('/login');
+    const profileId = profile?._id || profile?.id || id;
     try {
-      const res = await api.post(`/api/follow/${id}`);
+      const res = await api.post(`/api/follow/${profileId}`);
       if (res.success) {
         setIsFollowing(res.followed);
         fetchProfileDetails();
@@ -273,7 +289,7 @@ const CreatorProfile = () => {
         setProposalText('');
         // Trigger notification check
         await api.post('/api/notifications', {
-          recipientId: id,
+          recipientId: profile?._id || profile?.id || id,
           type: 'hire',
           message: `${user.name} invited you to pitch for "${recruiterProjects.find(p => p._id === selectedProject)?.title}"`,
           referenceId: selectedProject

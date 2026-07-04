@@ -5,10 +5,16 @@ const { isMongoConnected, fallbackDb } = require('../utils/dbFallback');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'project_earth_secret_123456';
 const JWT_EXPIRE = process.env.JWT_EXPIRE || '30d';
+const REFRESH_JWT_SECRET = process.env.REFRESH_JWT_SECRET || 'project_earth_refresh_secret_123456';
 
-// Helper to sign JWT token
+// Helper to sign access token
 const getSignedToken = (id) => {
-  return jwt.sign({ id }, JWT_SECRET, { expiresIn: JWT_EXPIRE });
+  return jwt.sign({ id }, JWT_SECRET, { expiresIn: '15m' }); // 15 minute access tokens
+};
+
+// Helper to sign refresh token
+const getSignedRefreshToken = (id) => {
+  return jwt.sign({ id }, REFRESH_JWT_SECRET, { expiresIn: '30d' }); // 30 day refresh tokens
 };
 
 // @desc    Register a new user
@@ -16,17 +22,34 @@ const getSignedToken = (id) => {
 // @access  Public
 exports.register = async (req, res) => {
   try {
-    const { name, email, password, role, category, skills, location, organization } = req.body;
+    const { name, username, email, password, role, category, skills, location, organization } = req.body;
+
+    if (!username) {
+      return res.status(400).json({ success: false, error: 'Please provide a unique username handle' });
+    }
+
+    const cleanUsername = username.startsWith('@') ? username.substring(1) : username;
+    const usernameRegex = /^[a-zA-Z0-9_]+$/;
+    if (!usernameRegex.test(cleanUsername)) {
+      return res.status(400).json({ success: false, error: 'Usernames can only contain letters, numbers, and underscores' });
+    }
 
     if (isMongoConnected()) {
-      // --- MongoDB Mode ---
-      const userExists = await User.findOne({ email });
-      if (userExists) {
+      // 1. Check email duplicate
+      const emailExists = await User.findOne({ email });
+      if (emailExists) {
         return res.status(400).json({ success: false, error: 'User already exists with this email' });
+      }
+
+      // 2. Check username duplicate
+      const usernameExists = await User.findOne({ username: cleanUsername.toLowerCase() });
+      if (usernameExists) {
+        return res.status(400).json({ success: false, error: 'Username handle is already taken' });
       }
 
       const user = await User.create({
         name,
+        username: cleanUsername.toLowerCase(),
         email,
         password,
         role,
@@ -37,12 +60,20 @@ exports.register = async (req, res) => {
       });
 
       const token = getSignedToken(user._id);
+      const refreshToken = getSignedRefreshToken(user._id);
+      
+      // Save refresh token to user
+      user.refreshToken = refreshToken;
+      await user.save();
+
       return res.status(201).json({
         success: true,
         token,
+        refreshToken,
         user: {
           id: user._id,
           name: user.name,
+          username: user.username,
           email: user.email,
           role: user.role,
           category: user.category,
@@ -52,13 +83,19 @@ exports.register = async (req, res) => {
           profileImage: user.profileImage,
           bio: user.bio,
           availability: user.availability,
+          isAdmin: user.isAdmin
         }
       });
     } else {
-      // --- Fallback Local File DB Mode ---
-      const userExists = fallbackDb.findUserByEmail(email);
-      if (userExists) {
+      // --- Fallback Mode ---
+      const emailExists = fallbackDb.findUserByEmail(email);
+      if (emailExists) {
         return res.status(400).json({ success: false, error: 'User already exists with this email' });
+      }
+
+      const usernameExists = fallbackDb.findUserByUsername(cleanUsername);
+      if (usernameExists) {
+        return res.status(400).json({ success: false, error: 'Username handle is already taken' });
       }
 
       // Hash password manually for fallback
@@ -67,6 +104,7 @@ exports.register = async (req, res) => {
 
       const user = fallbackDb.createUser({
         name,
+        username: cleanUsername.toLowerCase(),
         email,
         password: hashedPassword,
         role,
@@ -80,12 +118,18 @@ exports.register = async (req, res) => {
       });
 
       const token = getSignedToken(user._id);
+      const refreshToken = getSignedRefreshToken(user._id);
+      
+      fallbackDb.updateUser(user._id, { refreshToken });
+
       return res.status(201).json({
         success: true,
         token,
+        refreshToken,
         user: {
           id: user._id,
           name: user.name,
+          username: user.username,
           email: user.email,
           role: user.role,
           category: user.category,
@@ -95,6 +139,7 @@ exports.register = async (req, res) => {
           profileImage: user.profileImage,
           bio: user.bio,
           availability: user.availability,
+          isAdmin: user.isAdmin
         }
       });
     }
@@ -115,7 +160,6 @@ exports.login = async (req, res) => {
     }
 
     if (isMongoConnected()) {
-      // --- MongoDB Mode ---
       const user = await User.findOne({ email }).select('+password');
       if (!user) {
         return res.status(401).json({ success: false, error: 'Invalid credentials' });
@@ -127,12 +171,19 @@ exports.login = async (req, res) => {
       }
 
       const token = getSignedToken(user._id);
+      const refreshToken = getSignedRefreshToken(user._id);
+
+      user.refreshToken = refreshToken;
+      await user.save();
+
       return res.status(200).json({
         success: true,
         token,
+        refreshToken,
         user: {
           id: user._id,
           name: user.name,
+          username: user.username,
           email: user.email,
           role: user.role,
           category: user.category,
@@ -142,29 +193,33 @@ exports.login = async (req, res) => {
           profileImage: user.profileImage,
           bio: user.bio,
           availability: user.availability,
+          isAdmin: user.isAdmin
         }
       });
     } else {
-      // --- Fallback Local File DB Mode ---
       const user = fallbackDb.findUserByEmail(email);
       if (!user) {
         return res.status(401).json({ success: false, error: 'Invalid credentials' });
       }
 
-      // Check password
       const isMatch = await bcrypt.compare(password, user.password);
-      
       if (!isMatch) {
         return res.status(401).json({ success: false, error: 'Invalid credentials' });
       }
 
       const token = getSignedToken(user._id);
+      const refreshToken = getSignedRefreshToken(user._id);
+
+      fallbackDb.updateUser(user._id, { refreshToken });
+
       return res.status(200).json({
         success: true,
         token,
+        refreshToken,
         user: {
           id: user._id,
           name: user.name,
+          username: user.username,
           email: user.email,
           role: user.role,
           category: user.category,
@@ -174,8 +229,212 @@ exports.login = async (req, res) => {
           profileImage: user.profileImage,
           bio: user.bio,
           availability: user.availability,
+          isAdmin: user.isAdmin
         }
       });
+    }
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+// @desc    Refresh session token
+// @route   POST /api/auth/refresh
+// @access  Public
+exports.refreshToken = async (req, res) => {
+  try {
+    const { refreshToken } = req.body;
+    if (!refreshToken) {
+      return res.status(400).json({ success: false, error: 'Refresh token is required' });
+    }
+
+    let decoded;
+    try {
+      decoded = jwt.verify(refreshToken, REFRESH_JWT_SECRET);
+    } catch (err) {
+      return res.status(401).json({ success: false, error: 'Invalid or expired refresh token' });
+    }
+
+    if (isMongoConnected()) {
+      const user = await User.findById(decoded.id);
+      if (!user || user.refreshToken !== refreshToken) {
+        return res.status(401).json({ success: false, error: 'Session expired. Please log in again' });
+      }
+      const token = getSignedToken(user._id);
+      return res.status(200).json({ success: true, token });
+    } else {
+      const user = fallbackDb.findUserById(decoded.id);
+      if (!user || user.refreshToken !== refreshToken) {
+        return res.status(401).json({ success: false, error: 'Session expired. Please log in again' });
+      }
+      const token = getSignedToken(user._id);
+      return res.status(200).json({ success: true, token });
+    }
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+// @desc    Google login / signup endpoint
+// @route   POST /api/auth/google
+// @access  Public
+exports.googleLogin = async (req, res) => {
+  try {
+    const { email, name, googleId, profileImage } = req.body;
+    if (!email || !name) {
+      return res.status(400).json({ success: false, error: 'Invalid Google payload details' });
+    }
+
+    if (isMongoConnected()) {
+      let user = await User.findOne({ email });
+      if (!user) {
+        const uniqueUsername = email.split('@')[0].replace(/[^a-zA-Z0-9_]/g, '') + '_' + Date.now().toString().slice(-3);
+        user = await User.create({
+          name,
+          username: uniqueUsername,
+          email,
+          role: 'Creator', // Default to creator
+          profileImage: profileImage || '',
+          emailVerified: true
+        });
+      }
+
+      const token = getSignedToken(user._id);
+      const refreshToken = getSignedRefreshToken(user._id);
+      user.refreshToken = refreshToken;
+      await user.save();
+
+      return res.status(200).json({ success: true, token, refreshToken, user });
+    } else {
+      let user = fallbackDb.findUserByEmail(email);
+      if (!user) {
+        const uniqueUsername = email.split('@')[0].replace(/[^a-zA-Z0-9_]/g, '') + '_' + Date.now().toString().slice(-3);
+        user = fallbackDb.createUser({
+          name,
+          username: uniqueUsername,
+          email,
+          role: 'Creator',
+          profileImage: profileImage || '',
+          emailVerified: true
+        });
+      }
+
+      const token = getSignedToken(user._id);
+      const refreshToken = getSignedRefreshToken(user._id);
+      fallbackDb.updateUser(user._id, { refreshToken });
+
+      return res.status(200).json({ success: true, token, refreshToken, user });
+    }
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+// @desc    Forgot Password
+// @route   POST /api/auth/forgot-password
+// @access  Public
+exports.forgotPassword = async (req, res) => {
+  try {
+    const { email } = req.body;
+    const resetToken = Math.random().toString(36).substring(2, 10).toUpperCase(); // 8 char alphanumeric
+    const expires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+    let userFound = false;
+
+    if (isMongoConnected()) {
+      const user = await User.findOne({ email });
+      if (user) {
+        user.passwordResetToken = resetToken;
+        user.passwordResetExpires = expires;
+        await user.save();
+        userFound = true;
+      }
+    } else {
+      const user = fallbackDb.findUserByEmail(email);
+      if (user) {
+        fallbackDb.updateUser(user._id, {
+          passwordResetToken: resetToken,
+          passwordResetExpires: expires.toISOString()
+        });
+        userFound = true;
+      }
+    }
+
+    // Mock Mailer Alert
+    console.log(`[MAIL SYSTEM - FORGOT PASSWORD] To: ${email} | Code: ${resetToken}`);
+
+    // Always respond with success to prevent email enumeration attacks
+    return res.status(200).json({
+      success: true,
+      message: 'If email exists, verification code has been dispatched.'
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+// @desc    Reset Password
+// @route   POST /api/auth/reset-password
+// @access  Public
+exports.resetPassword = async (req, res) => {
+  try {
+    const { email, code, newPassword } = req.body;
+
+    if (!email || !code || !newPassword) {
+      return res.status(450).json({ success: false, error: 'Please provide email, code, and new password' });
+    }
+
+    if (isMongoConnected()) {
+      const user = await User.findOne({ 
+        email, 
+        passwordResetToken: code,
+        passwordResetExpires: { $gt: Date.now() }
+      });
+
+      if (!user) {
+        return res.status(400).json({ success: false, error: 'Invalid or expired verification code' });
+      }
+
+      user.password = newPassword;
+      user.passwordResetToken = undefined;
+      user.passwordResetExpires = undefined;
+      await user.save();
+      return res.status(200).json({ success: true, message: 'Password has been updated' });
+    } else {
+      const user = fallbackDb.findUserByEmail(email);
+      if (!user || user.passwordResetToken !== code || new Date(user.passwordResetExpires) < new Date()) {
+        return res.status(400).json({ success: false, error: 'Invalid or expired verification code' });
+      }
+
+      const salt = await bcrypt.genSalt(10);
+      const hashedPassword = await bcrypt.hash(newPassword, salt);
+
+      fallbackDb.updateUser(user._id, {
+        password: hashedPassword,
+        passwordResetToken: null,
+        passwordResetExpires: null
+      });
+
+      return res.status(200).json({ success: true, message: 'Password has been updated' });
+    }
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+// @desc    Verify Email
+// @route   POST /api/auth/verify-email
+// @access  Private
+exports.verifyEmail = async (req, res) => {
+  try {
+    if (isMongoConnected()) {
+      const user = await User.findById(req.user.id);
+      user.emailVerified = true;
+      await user.save();
+      return res.status(200).json({ success: true, user });
+    } else {
+      const user = fallbackDb.updateUser(req.user.id, { emailVerified: true });
+      return res.status(200).json({ success: true, user });
     }
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -197,6 +456,26 @@ exports.getMe = async (req, res) => {
       }
       return res.status(200).json({ success: true, user });
     }
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+// @desc    Logout user (clear refresh tokens)
+// @route   POST /api/auth/logout
+// @access  Private
+exports.logout = async (req, res) => {
+  try {
+    if (isMongoConnected()) {
+      const user = await User.findById(req.user.id);
+      if (user) {
+        user.refreshToken = undefined;
+        await user.save();
+      }
+    } else {
+      fallbackDb.updateUser(req.user.id, { refreshToken: null });
+    }
+    return res.status(200).json({ success: true, message: 'Logged out successfully' });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
