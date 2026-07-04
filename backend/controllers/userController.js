@@ -194,16 +194,32 @@ exports.getUserByUsername = async (req, res) => {
     const { username } = req.params;
     const cleanUsername = username.startsWith('@') ? username.substring(1) : username;
 
+    // Decode token if sent to avoid self-view counts increment
+    let viewerId = null;
+    if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
+      try {
+        const token = req.headers.authorization.split(' ')[1];
+        const jwt = require('jsonwebtoken');
+        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'project_earth_secret_123456');
+        viewerId = decoded.id;
+      } catch (err) {
+        // ignore
+      }
+    }
+
     if (isMongoConnected()) {
-      const creator = await User.findOneAndUpdate(
-        { username: cleanUsername.toLowerCase() },
-        { $inc: { profileViews: 1 } },
-        { new: true }
-      );
-      
+      const creator = await User.findOne({ username: cleanUsername.toLowerCase() });
       if (!creator) {
         return res.status(404).json({ success: false, error: 'User not found' });
       }
+
+      // Check self view
+      const isSelf = viewerId && viewerId.toString() === creator._id.toString();
+      if (!isSelf) {
+        creator.profileViews = (creator.profileViews || 0) + 1;
+        await creator.save();
+      }
+
       return res.status(200).json({ success: true, creator });
     } else {
       const creator = fallbackDb.findUserByUsername(cleanUsername);
@@ -211,10 +227,12 @@ exports.getUserByUsername = async (req, res) => {
         return res.status(404).json({ success: false, error: 'User not found' });
       }
       
-      // Increment views count offline
-      const views = (creator.profileViews || 0) + 1;
-      fallbackDb.updateUser(creator._id, { profileViews: views });
-      creator.profileViews = views;
+      const isSelf = viewerId && viewerId.toString() === creator._id.toString();
+      if (!isSelf) {
+        const views = (creator.profileViews || 0) + 1;
+        fallbackDb.updateUser(creator._id, { profileViews: views });
+        creator.profileViews = views;
+      }
 
       return res.status(200).json({ success: true, creator });
     }
@@ -333,6 +351,51 @@ exports.adminDeletePost = async (req, res) => {
       fallbackDb.deletePost(postId);
       return res.status(200).json({ success: true, data: {} });
     }
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+// @desc    Block / Unblock a User
+// @route   POST /api/users/block/:id
+// @access  Private
+exports.blockUser = async (req, res) => {
+  try {
+    const targetId = req.params.id;
+    const userId = req.user.id;
+
+    if (isMongoConnected()) {
+      const user = await User.findById(userId);
+      if (!user) return res.status(404).json({ success: false, error: 'User not found' });
+      const alreadyBlocked = user.blockedUsers && user.blockedUsers.includes(targetId);
+      if (alreadyBlocked) {
+        user.blockedUsers = user.blockedUsers.filter(id => id.toString() !== targetId);
+      } else {
+        if (!user.blockedUsers) user.blockedUsers = [];
+        user.blockedUsers.push(targetId);
+      }
+      await user.save();
+      return res.status(200).json({ success: true, blocked: !alreadyBlocked });
+    } else {
+      const user = fallbackDb.blockUser(userId, targetId);
+      if (!user) return res.status(404).json({ success: false, error: 'User not found' });
+      const blocked = user.blockedUsers && user.blockedUsers.includes(targetId);
+      return res.status(200).json({ success: true, blocked });
+    }
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+// @desc    Report a User
+// @route   POST /api/users/report/:id
+// @access  Private
+exports.reportUser = async (req, res) => {
+  try {
+    const targetId = req.params.id;
+    const { reason } = req.body;
+    console.log(`[USER REPORTED] Target: ${targetId} | Reporter: ${req.user.id} | Reason: ${reason}`);
+    return res.status(200).json({ success: true, message: 'Report submitted successfully' });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }

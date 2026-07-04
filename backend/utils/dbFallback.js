@@ -141,6 +141,117 @@ const seedBaseData = (data) => {
     changed = true;
   }
 
+  if (data.projects.length === 0) {
+    data.projects = [
+      {
+        _id: 'proj_mock_1',
+        title: '3D Sci-Fi Virtual World Builder',
+        description: 'Design and optimize modular sci-fi buildings, environments, and foliage assets inside Unreal Engine 5. High visual fidelity shaders and modular blueprint interactions are required. Collaborative pitch for visual dev.',
+        budget: 12000,
+        deadline: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+        requiredSkills: ['Blender', 'Unreal Engine', 'C++', 'Shaders'],
+        category: 'Gaming',
+        recruiterId: 'system',
+        status: 'open',
+        coverImage: 'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=800',
+        companyLogo: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=100',
+        companyName: 'Nexus Unreal Studio',
+        location: 'Remote',
+        workType: 'Remote',
+        openPositions: 3,
+        applicantsCount: 14,
+        requirements: [
+          '3+ years experience with Unreal Engine modeling and lighting pipelines.',
+          'Solid understanding of GLSL/HLSL custom shaders and particle setups.',
+          'Proven portfolio of sci-fi style modular environmental kits.'
+        ],
+        responsibilities: [
+          'Design modular corridors, hubs, and exterior terrain pieces.',
+          'Set up real-time blueprints for door triggers and lighting variations.',
+          'Optimize draw calls and coordinate asset compression.'
+        ],
+        benefits: [
+          'Competitive project-based contracting fees.',
+          'Creative design autonomy and flexible hours.',
+          'Inclusion in studio production credits.'
+        ],
+        timeline: ['Week 1-2: Visual Dev & Greyboxing', 'Week 3-5: High-Poly Asset Modeling', 'Week 6: Shaders Setup & UE Integration'],
+        createdAt: new Date().toISOString()
+      },
+      {
+        _id: 'proj_mock_2',
+        title: 'Cinematic Video Editor - Web Series',
+        description: 'Edit and grade an upcoming 6-episode sci-fi comedy web series. High proficiency in grading, sound alignment, and pacing is required.',
+        budget: 8500,
+        deadline: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString(),
+        requiredSkills: ['Premiere Pro', 'After Effects', 'Color Grading'],
+        category: 'Film & Entertainment',
+        recruiterId: 'system',
+        status: 'open',
+        coverImage: 'https://images.unsplash.com/photo-1492691527719-9d1e07e534b4?w=800',
+        companyLogo: 'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?w=100',
+        companyName: 'Zenith Studios',
+        location: 'Mumbai, India',
+        workType: 'Hybrid',
+        openPositions: 1,
+        applicantsCount: 8,
+        requirements: [
+          'Experience editing narrative-based comedy or drama with tight pacing.',
+          'Expertise in DaVinci Resolve color pipelines.',
+          'Strong ear for temporary scoring and sound design overlays.'
+        ],
+        responsibilities: [
+          'Assemble rough cuts, fine cuts, and locked edits for 6 episodes.',
+          'Color match shots across multiple camera bodies.',
+          'Deliver sound design blueprints for composers.'
+        ],
+        benefits: [
+          'Professional editing suite access in studio.',
+          'Coaching sessions with senior producers.',
+          'Percentage revenue shares on YouTube distributions.'
+        ],
+        timeline: ['Week 1: Rough Cuts Assembly', 'Week 2: Locking Pace & Cuts', 'Week 3: Color Grading & Resolving FX'],
+        createdAt: new Date().toISOString()
+      },
+      {
+        _id: 'proj_mock_3',
+        title: 'Interactive WebGL Developer',
+        description: 'Create a high-performance interactive homepage using Three.js, WebGL, and custom vertex shaders for a luxury streetwear fashion brand.',
+        budget: 9500,
+        deadline: new Date(Date.now() + 45 * 24 * 60 * 60 * 1000).toISOString(),
+        requiredSkills: ['Three.js', 'WebGL', 'GLSL', 'React'],
+        category: 'Technology',
+        recruiterId: 'system',
+        status: 'open',
+        coverImage: 'https://images.unsplash.com/photo-1550751827-4bd374c3f58b?w=800',
+        companyLogo: 'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=100',
+        companyName: 'Hyperlight Corp',
+        location: 'San Francisco, CA',
+        workType: 'Onsite',
+        openPositions: 2,
+        applicantsCount: 19,
+        requirements: [
+          'Advanced knowledge of Three.js geometry modifications and raycasting.',
+          'Expert shader development (vertex and fragment GLSL codes).',
+          'Optimizing web experiences for mobile Safari/Chrome browsers.'
+        ],
+        responsibilities: [
+          'Translate Figma streetwear animations into real-time WebGL models.',
+          'Configure lighting arrays and shadow maps dynamically.',
+          'Optimize canvas framerates to hit a solid 60fps on mobile.'
+        ],
+        benefits: [
+          'Competitive base contracting fees.',
+          'Access to high-fidelity streetwear catalog assets.',
+          'Option to transition into full-time creative tech lead roles.'
+        ],
+        timeline: ['Week 1: Figma Translation & Assets Loading', 'Week 2-4: Shaders Tuning & 3D Interactive Setup', 'Week 5-6: Framing & Optimizations'],
+        createdAt: new Date().toISOString()
+      }
+    ];
+    changed = true;
+  }
+
   if (changed) {
     writeData(data);
   }
@@ -862,6 +973,49 @@ module.exports = {
         return true;
       }
       return false;
+    },
+
+    deleteMessageForEveryone: (msgId) => {
+      const db = readData();
+      const idx = db.messages.findIndex(m => m._id === msgId);
+      if (idx !== -1) {
+        db.messages[idx].text = 'This message was deleted';
+        db.messages[idx].deletedForEveryone = true;
+        db.messages[idx].media = '';
+        db.messages[idx].fileName = '';
+        writeData(db);
+        return db.messages[idx];
+      }
+      return null;
+    },
+
+    deleteConversation: (userId, recipientId) => {
+      const db = readData();
+      db.messages = db.messages.filter(m => 
+        !((m.senderId === userId && m.recipientId === recipientId) || 
+          (m.senderId === recipientId && m.recipientId === userId))
+      );
+      writeData(db);
+      return true;
+    },
+
+    blockUser: (userId, targetId) => {
+      const db = readData();
+      const idx = db.users.findIndex(u => u._id === userId);
+      if (idx !== -1) {
+        const user = db.users[idx];
+        if (!user.blockedUsers) user.blockedUsers = [];
+        const isBlocked = user.blockedUsers.includes(targetId);
+        if (isBlocked) {
+          user.blockedUsers = user.blockedUsers.filter(id => id !== targetId);
+        } else {
+          user.blockedUsers.push(targetId);
+        }
+        db.users[idx] = user;
+        writeData(db);
+        return user;
+      }
+      return null;
     }
   }
 };

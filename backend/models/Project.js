@@ -49,6 +49,56 @@ const ProjectSchema = new mongoose.Schema({
     enum: ['open', 'closed', 'in-progress'],
     default: 'open',
   },
+  // Premium Fields
+  coverImage: {
+    type: String,
+    default: '',
+  },
+  companyLogo: {
+    type: String,
+    default: '',
+  },
+  companyName: {
+    type: String,
+    default: '',
+  },
+  location: {
+    type: String,
+    default: 'Remote',
+  },
+  workType: {
+    type: String,
+    enum: ['Remote', 'Hybrid', 'Onsite'],
+    default: 'Remote',
+  },
+  openPositions: {
+    type: Number,
+    default: 1,
+  },
+  applicantsCount: {
+    type: Number,
+    default: 0,
+  },
+  savedBy: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  }],
+  requirements: {
+    type: [String],
+    default: []
+  },
+  responsibilities: {
+    type: [String],
+    default: []
+  },
+  benefits: {
+    type: [String],
+    default: []
+  },
+  timeline: {
+    type: [String],
+    default: []
+  },
   createdAt: {
     type: Date,
     default: Date.now,

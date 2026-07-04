@@ -19,7 +19,19 @@ const MessageSchema = new mongoose.Schema({
     type: String,
     default: '',
   },
+  fileName: {
+    type: String,
+    default: '',
+  },
+  fileType: {
+    type: String,
+    default: '',
+  },
   isRead: {
+    type: Boolean,
+    default: false,
+  },
+  deletedForEveryone: {
     type: Boolean,
     default: false,
   },

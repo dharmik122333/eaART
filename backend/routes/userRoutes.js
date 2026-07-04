@@ -2,7 +2,8 @@ const express = require('express');
 const { 
   updateProfile, uploadProfileImage, getCreators, getCreatorById,
   getUserByUsername, deleteAccount, deactivateAccount,
-  adminGetAllUsers, adminDeleteUser, adminDeletePost
+  adminGetAllUsers, adminDeleteUser, adminDeletePost,
+  blockUser, reportUser
 } = require('../controllers/userController');
 const { protect } = require('../middleware/auth');
 const upload = require('../middleware/upload');
@@ -21,5 +22,9 @@ router.put('/deactivate', protect, deactivateAccount);
 router.get('/admin/all', protect, adminGetAllUsers);
 router.delete('/admin/user/:id', protect, adminDeleteUser);
 router.delete('/admin/post/:id', protect, adminDeletePost);
+
+// Social Moderation Block / Report
+router.post('/block/:id', protect, blockUser);
+router.post('/report/:id', protect, reportUser);
 
 module.exports = router;

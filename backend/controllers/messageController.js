@@ -187,3 +187,58 @@ exports.getConversations = async (req, res) => {
     res.status(500).json({ success: false, error: error.message });
   }
 };
+
+// @desc    Delete message for everyone
+// @route   DELETE /api/messages/message/:id
+// @access  Private
+exports.deleteMessageForEveryone = async (req, res) => {
+  try {
+    const msgId = req.params.id;
+    const userId = req.user.id;
+
+    if (isMongoConnected()) {
+      const message = await Message.findById(msgId);
+      if (!message) return res.status(404).json({ success: false, error: 'Message not found' });
+      if (message.senderId.toString() !== userId) {
+        return res.status(403).json({ success: false, error: 'Not authorized' });
+      }
+      message.text = 'This message was deleted';
+      message.deletedForEveryone = true;
+      message.media = '';
+      message.fileName = '';
+      await message.save();
+      return res.status(200).json({ success: true, message });
+    } else {
+      const message = fallbackDb.deleteMessageForEveryone(msgId);
+      if (!message) return res.status(404).json({ success: false, error: 'Message not found' });
+      return res.status(200).json({ success: true, message });
+    }
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+// @desc    Delete entire conversation
+// @route   DELETE /api/messages/conversations/:recipientId
+// @access  Private
+exports.deleteConversation = async (req, res) => {
+  try {
+    const { recipientId } = req.params;
+    const userId = req.user.id;
+
+    if (isMongoConnected()) {
+      await Message.deleteMany({
+        $or: [
+          { senderId: userId, recipientId },
+          { senderId: recipientId, recipientId: userId }
+        ]
+      });
+      return res.status(200).json({ success: true });
+    } else {
+      fallbackDb.deleteConversation(userId, recipientId);
+      return res.status(200).json({ success: true });
+    }
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
