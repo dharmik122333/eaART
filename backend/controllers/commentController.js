@@ -216,3 +216,41 @@ exports.deleteComment = async (req, res) => {
     res.status(500).json({ success: false, error: error.message });
   }
 };
+
+// @desc    Edit a comment
+// @route   PUT /api/comments/:id
+// @access  Private
+exports.editComment = async (req, res) => {
+  try {
+    const commentId = req.params.id;
+    const { content } = req.body;
+    const userId = req.user.id;
+
+    if (!content) {
+      return res.status(400).json({ success: false, error: 'Comment content is required' });
+    }
+
+    if (isMongoConnected()) {
+      const comment = await Comment.findById(commentId);
+      if (!comment) return res.status(404).json({ success: false, error: 'Comment not found' });
+      if (comment.authorId.toString() !== userId) {
+        return res.status(403).json({ success: false, error: 'Not authorized to edit this comment' });
+      }
+      comment.content = content;
+      await comment.save();
+      return res.status(200).json({ success: true, comment });
+    } else {
+      const comment = fallbackDb.findCommentById(commentId);
+      if (!comment) return res.status(404).json({ success: false, error: 'Comment not found' });
+      const authId = comment.authorId?._id || comment.authorId;
+      if (authId !== userId) {
+        return res.status(403).json({ success: false, error: 'Not authorized to edit this comment' });
+      }
+      comment.content = content;
+      fallbackDb.updateComment(commentId, { content });
+      return res.status(200).json({ success: true, comment });
+    }
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
