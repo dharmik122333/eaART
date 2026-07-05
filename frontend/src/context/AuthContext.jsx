@@ -45,6 +45,9 @@ export const AuthProvider = ({ children }) => {
     try {
       const data = await api.post('/api/auth/login', { email, password });
       if (data.success) {
+        if (data.otpRequired) {
+          return data; // return to handle OTP page redirect on login view
+        }
         localStorage.setItem('token', data.token);
         if (data.refreshToken) {
           localStorage.setItem('refreshToken', data.refreshToken);
@@ -53,6 +56,24 @@ export const AuthProvider = ({ children }) => {
           localStorage.setItem('rememberedEmail', email);
         } else {
           localStorage.removeItem('rememberedEmail');
+        }
+        setUser(data.user);
+        return data.user;
+      }
+    } catch (err) {
+      setError(err.message);
+      throw err;
+    }
+  };
+
+  const verifyOtp = async (email, otp) => {
+    setError(null);
+    try {
+      const data = await api.post('/api/auth/verify-otp', { email, otp });
+      if (data.success) {
+        localStorage.setItem('token', data.token);
+        if (data.refreshToken) {
+          localStorage.setItem('refreshToken', data.refreshToken);
         }
         setUser(data.user);
         return data.user;
@@ -143,6 +164,7 @@ export const AuthProvider = ({ children }) => {
     loading,
     error,
     login,
+    verifyOtp,
     register,
     googleLogin,
     logout,

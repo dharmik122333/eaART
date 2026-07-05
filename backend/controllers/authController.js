@@ -2,6 +2,7 @@ const User = require('../models/User');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const { isMongoConnected, fallbackDb } = require('../utils/dbFallback');
+const sendEmail = require('../utils/email');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'project_earth_secret_123456';
 const JWT_EXPIRE = process.env.JWT_EXPIRE || '30d';
@@ -150,9 +151,6 @@ exports.register = async (req, res) => {
   }
 };
 
-// @desc    Login user
-// @route   POST /api/auth/login
-// @access  Public
 exports.login = async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -172,10 +170,100 @@ exports.login = async (req, res) => {
         return res.status(401).json({ success: false, error: 'Invalid credentials' });
       }
 
+      // Generate 6-digit verification code
+      const otp = Math.floor(100000 + Math.random() * 900000).toString();
+      const expires = new Date(Date.now() + 5 * 60 * 1000); // valid for 5 mins
+
+      // Save OTP details to user
+      await User.updateOne(
+        { _id: user._id }, 
+        { $set: { loginOtp: otp, loginOtpExpires: expires } }
+      );
+
+      // Dispatch verification email
+      await sendEmail({
+        email: user.email,
+        subject: 'Project EARTH - Login Verification Code',
+        message: `Your login verification OTP is: ${otp}\n\nThis code is valid for 5 minutes. If you did not attempt to log in, please secure your password immediately.`,
+      });
+
+      return res.status(200).json({
+        success: true,
+        otpRequired: true,
+        email: user.email,
+        message: 'Verification code dispatched to your email.'
+      });
+    } else {
+      // --- Fallback Mode ---
+      const user = fallbackDb.findUserByEmail(email);
+      if (!user) {
+        return res.status(401).json({ success: false, error: 'Invalid credentials' });
+      }
+
+      const isMatch = await bcrypt.compare(password, user.password);
+      if (!isMatch) {
+        return res.status(401).json({ success: false, error: 'Invalid credentials' });
+      }
+
+      // Generate OTP for fallback mode
+      const otp = Math.floor(100000 + Math.random() * 900000).toString();
+      const expires = new Date(Date.now() + 5 * 60 * 1000);
+
+      fallbackDb.updateUser(user._id, { 
+        loginOtp: otp, 
+        loginOtpExpires: expires.toISOString() 
+      });
+
+      await sendEmail({
+        email: user.email,
+        subject: 'Project EARTH - Login Verification Code (Fallback Mode)',
+        message: `Your login verification OTP is: ${otp}\n\nThis code is valid for 5 minutes.`,
+      });
+
+      return res.status(200).json({
+        success: true,
+        otpRequired: true,
+        email: user.email,
+        message: 'Verification code dispatched to your email.'
+      });
+    }
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+// @desc    Verify login OTP and issue token
+// @route   POST /api/auth/verify-otp
+// @access  Public
+exports.verifyLoginOtp = async (req, res) => {
+  try {
+    const { email, otp } = req.body;
+
+    if (!email || !otp) {
+      return res.status(400).json({ success: false, error: 'Please provide email and verification code' });
+    }
+
+    if (isMongoConnected()) {
+      const user = await User.findOne({ email });
+      if (!user) {
+        return res.status(404).json({ success: false, error: 'User not found' });
+      }
+
+      if (!user.loginOtp || user.loginOtp !== otp || new Date(user.loginOtpExpires) < new Date()) {
+        return res.status(400).json({ success: false, error: 'Invalid or expired verification code' });
+      }
+
       const token = getSignedToken(user._id);
       const refreshToken = getSignedRefreshToken(user._id);
 
-      await User.updateOne({ _id: user._id }, { $set: { refreshToken } });
+      // Save refresh token, clear OTP
+      await User.updateOne(
+        { _id: user._id },
+        { 
+          $set: { refreshToken },
+          $unset: { loginOtp: 1, loginOtpExpires: 1 } 
+        }
+      );
 
       return res.status(200).json({
         success: true,
@@ -198,20 +286,24 @@ exports.login = async (req, res) => {
         }
       });
     } else {
+      // --- Fallback Mode ---
       const user = fallbackDb.findUserByEmail(email);
       if (!user) {
-        return res.status(401).json({ success: false, error: 'Invalid credentials' });
+        return res.status(404).json({ success: false, error: 'User not found' });
       }
 
-      const isMatch = await bcrypt.compare(password, user.password);
-      if (!isMatch) {
-        return res.status(401).json({ success: false, error: 'Invalid credentials' });
+      if (!user.loginOtp || user.loginOtp !== otp || new Date(user.loginOtpExpires) < new Date()) {
+        return res.status(400).json({ success: false, error: 'Invalid or expired verification code' });
       }
 
       const token = getSignedToken(user._id);
       const refreshToken = getSignedRefreshToken(user._id);
 
-      fallbackDb.updateUser(user._id, { refreshToken });
+      fallbackDb.updateUser(user._id, { 
+        refreshToken,
+        loginOtp: null,
+        loginOtpExpires: null
+      });
 
       return res.status(200).json({
         success: true,

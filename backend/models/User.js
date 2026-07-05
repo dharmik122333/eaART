@@ -134,6 +134,8 @@ const UserSchema = new mongoose.Schema({
   passwordResetToken: String,
   passwordResetExpires: Date,
   refreshToken: String,
+  loginOtp: String,
+  loginOtpExpires: Date,
   isAdmin: {
     type: Boolean,
     default: false,
