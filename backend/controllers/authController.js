@@ -174,7 +174,7 @@ exports.login = async (req, res) => {
       const refreshToken = getSignedRefreshToken(user._id);
 
       user.refreshToken = refreshToken;
-      await user.save();
+      await user.save({ validateBeforeSave: false });
 
       return res.status(200).json({
         success: true,
@@ -302,7 +302,7 @@ exports.googleLogin = async (req, res) => {
       const token = getSignedToken(user._id);
       const refreshToken = getSignedRefreshToken(user._id);
       user.refreshToken = refreshToken;
-      await user.save();
+      await user.save({ validateBeforeSave: false });
 
       return res.status(200).json({ success: true, token, refreshToken, user });
     } else {
@@ -346,7 +346,7 @@ exports.forgotPassword = async (req, res) => {
       if (user) {
         user.passwordResetToken = resetToken;
         user.passwordResetExpires = expires;
-        await user.save();
+        await user.save({ validateBeforeSave: false });
         userFound = true;
       }
     } else {
@@ -398,7 +398,7 @@ exports.resetPassword = async (req, res) => {
       user.password = newPassword;
       user.passwordResetToken = undefined;
       user.passwordResetExpires = undefined;
-      await user.save();
+      await user.save({ validateBeforeSave: false });
       return res.status(200).json({ success: true, message: 'Password has been updated' });
     } else {
       const user = fallbackDb.findUserByEmail(email);
@@ -430,7 +430,7 @@ exports.verifyEmail = async (req, res) => {
     if (isMongoConnected()) {
       const user = await User.findById(req.user.id);
       user.emailVerified = true;
-      await user.save();
+      await user.save({ validateBeforeSave: false });
       return res.status(200).json({ success: true, user });
     } else {
       const user = fallbackDb.updateUser(req.user.id, { emailVerified: true });
@@ -470,7 +470,7 @@ exports.logout = async (req, res) => {
       const user = await User.findById(req.user.id);
       if (user) {
         user.refreshToken = undefined;
-        await user.save();
+        await user.save({ validateBeforeSave: false });
       }
     } else {
       fallbackDb.updateUser(req.user.id, { refreshToken: null });
