@@ -17,17 +17,4 @@ router.post('/verify-email', protect, verifyEmail);
 router.post('/logout', protect, logout);
 router.get('/me', protect, getMe);
 
-const mongoose = require('mongoose');
-router.get('/wipe-database-danger-zone', async (req, res) => {
-  try {
-    const collections = Object.keys(mongoose.connection.collections);
-    for (const name of collections) {
-      await mongoose.connection.collections[name].deleteMany({});
-    }
-    return res.json({ success: true, message: 'Database wiped successfully! Clean slate initiated.' });
-  } catch (err) {
-    return res.status(500).json({ success: false, error: err.message });
-  }
-});
-
 module.exports = router;
