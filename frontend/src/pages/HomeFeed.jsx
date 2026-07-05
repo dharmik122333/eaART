@@ -574,7 +574,7 @@ const HomeFeed = () => {
                         <select 
                           value={postCategory}
                           onChange={(e) => setPostCategory(e.target.value)}
-                          className="bg-zinc-905 border border-zinc-800 text-zinc-400 text-xs rounded-lg px-2.5 py-1.5 outline-none hover:text-white"
+                          className="bg-zinc-900 border border-zinc-800 text-zinc-300 text-xs rounded-lg px-2.5 py-1.5 outline-none hover:text-white hover:border-zinc-700 cursor-pointer transition"
                         >
                           <option value="General">🌍 General</option>
                           <option value="Arts & Design">🎨 Artwork</option>
