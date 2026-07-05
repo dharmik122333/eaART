@@ -24,11 +24,13 @@ exports.register = async (req, res) => {
   try {
     const { name, username, email, password, role, category, skills, location, organization } = req.body;
 
-    if (!username) {
-      return res.status(400).json({ success: false, error: 'Please provide a unique username handle' });
+    let targetUsername = username;
+    if (!targetUsername) {
+      const base = name ? name.toLowerCase().replace(/[^a-z0-9_]/g, '') : (email ? email.split('@')[0].replace(/[^a-z0-9_]/g, '') : 'user');
+      targetUsername = base + Math.floor(100 + Math.random() * 900);
     }
 
-    const cleanUsername = username.startsWith('@') ? username.substring(1) : username;
+    const cleanUsername = targetUsername.startsWith('@') ? targetUsername.substring(1) : targetUsername;
     const usernameRegex = /^[a-zA-Z0-9_]+$/;
     if (!usernameRegex.test(cleanUsername)) {
       return res.status(400).json({ success: false, error: 'Usernames can only contain letters, numbers, and underscores' });
