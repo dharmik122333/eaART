@@ -175,8 +175,7 @@ exports.login = async (req, res) => {
       const token = getSignedToken(user._id);
       const refreshToken = getSignedRefreshToken(user._id);
 
-      user.refreshToken = refreshToken;
-      await user.save({ validateBeforeSave: false });
+      await User.updateOne({ _id: user._id }, { $set: { refreshToken } });
 
       return res.status(200).json({
         success: true,
@@ -303,8 +302,7 @@ exports.googleLogin = async (req, res) => {
 
       const token = getSignedToken(user._id);
       const refreshToken = getSignedRefreshToken(user._id);
-      user.refreshToken = refreshToken;
-      await user.save({ validateBeforeSave: false });
+      await User.updateOne({ _id: user._id }, { $set: { refreshToken } });
 
       return res.status(200).json({ success: true, token, refreshToken, user });
     } else {
@@ -346,9 +344,10 @@ exports.forgotPassword = async (req, res) => {
     if (isMongoConnected()) {
       const user = await User.findOne({ email });
       if (user) {
-        user.passwordResetToken = resetToken;
-        user.passwordResetExpires = expires;
-        await user.save({ validateBeforeSave: false });
+        await User.updateOne(
+          { _id: user._id },
+          { $set: { passwordResetToken: resetToken, passwordResetExpires: expires } }
+        );
         userFound = true;
       }
     } else {
@@ -397,10 +396,15 @@ exports.resetPassword = async (req, res) => {
         return res.status(400).json({ success: false, error: 'Invalid or expired verification code' });
       }
 
-      user.password = newPassword;
-      user.passwordResetToken = undefined;
-      user.passwordResetExpires = undefined;
-      await user.save({ validateBeforeSave: false });
+      const salt = await bcrypt.genSalt(10);
+      const hashedPassword = await bcrypt.hash(newPassword, salt);
+      await User.updateOne(
+        { _id: user._id },
+        {
+          $set: { password: hashedPassword },
+          $unset: { passwordResetToken: 1, passwordResetExpires: 1 }
+        }
+      );
       return res.status(200).json({ success: true, message: 'Password has been updated' });
     } else {
       const user = fallbackDb.findUserByEmail(email);
@@ -431,8 +435,7 @@ exports.verifyEmail = async (req, res) => {
   try {
     if (isMongoConnected()) {
       const user = await User.findById(req.user.id);
-      user.emailVerified = true;
-      await user.save({ validateBeforeSave: false });
+      await User.updateOne({ _id: user._id }, { $set: { emailVerified: true } });
       return res.status(200).json({ success: true, user });
     } else {
       const user = fallbackDb.updateUser(req.user.id, { emailVerified: true });
@@ -471,8 +474,7 @@ exports.logout = async (req, res) => {
     if (isMongoConnected()) {
       const user = await User.findById(req.user.id);
       if (user) {
-        user.refreshToken = undefined;
-        await user.save({ validateBeforeSave: false });
+        await User.updateOne({ _id: user._id }, { $unset: { refreshToken: 1 } });
       }
     } else {
       fallbackDb.updateUser(req.user.id, { refreshToken: null });
