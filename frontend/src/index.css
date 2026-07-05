@@ -2,6 +2,10 @@
 @tailwind components;
 @tailwind utilities;
 
+html {
+  font-size: 17.2px;
+}
+
 @layer base {
   body {
     @apply bg-background text-zinc-100 antialiased font-sans selection:bg-primary selection:text-white;
