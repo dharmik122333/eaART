@@ -93,7 +93,7 @@ const Messages = () => {
     try {
       const res = await api.get('/api/users/creators');
       if (res.success) {
-        const list = (res.creators || []).filter(u => u._id !== user?.id);
+        const list = (res.creators || []).filter(u => u._id !== (user?.id || user?._id));
         setAllUsers(list);
       }
     } catch (err) {
@@ -345,6 +345,19 @@ const Messages = () => {
       }
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  const handleUnsendMessage = async (msgId) => {
+    if (!window.confirm('Are you sure you want to unsend this message?')) return;
+    try {
+      const res = await api.delete(`/api/messages/message/${msgId}`);
+      if (res.success) {
+        setMessages(prev => prev.map(m => m._id === msgId ? (res.message || m) : m));
+      }
+    } catch (err) {
+      console.error(err);
+      alert(err.message || 'Failed to unsend message');
     }
   };
 
@@ -735,7 +748,7 @@ const Messages = () => {
                 ) : (
                   <>
                     {filteredMessages.map(msg => {
-                      const isMe = (msg.senderId?._id || msg.senderId) === user?.id;
+                      const isMe = (msg.senderId?._id || msg.senderId) === (user?.id || user?._id);
                       const hasAttachment = msg.media && msg.fileName;
 
                       return (
@@ -744,18 +757,29 @@ const Messages = () => {
                             
                             {/* Message Reaction Hover Bar */}
                             {!msg.deletedForEveryone && (
-                              <div className={`absolute -top-7 z-10 flex gap-1 p-1 bg-zinc-900 border border-zinc-800 rounded-lg opacity-0 group-hover:opacity-100 transition-all ${
+                              <div className={`absolute -top-7 z-10 flex items-center gap-1.5 p-1 bg-zinc-900 border border-zinc-800 rounded-lg opacity-0 group-hover:opacity-100 transition-all ${
                                 isMe ? 'right-2' : 'left-2'
                               }`}>
-                                {['👍', '❤️', '🔥', '😂'].map(emoji => (
+                                <div className="flex gap-1">
+                                  {['👍', '❤️', '🔥', '😂'].map(emoji => (
+                                    <button
+                                      key={emoji}
+                                      onClick={() => handleToggleReaction(msg._id, emoji)}
+                                      className="hover:scale-125 transition text-[10px]"
+                                    >
+                                      {emoji}
+                                    </button>
+                                  ))}
+                                </div>
+                                {isMe && (
                                   <button
-                                    key={emoji}
-                                    onClick={() => handleToggleReaction(msg._id, emoji)}
-                                    className="hover:scale-125 transition text-[10px]"
+                                    onClick={() => handleUnsendMessage(msg._id)}
+                                    className="p-1 rounded text-zinc-500 hover:text-red-400 hover:bg-red-500/10 transition"
+                                    title="Unsend Message"
                                   >
-                                    {emoji}
+                                    <Trash2 className="w-3 h-3" />
                                   </button>
-                                ))}
+                                )}
                               </div>
                             )}
 

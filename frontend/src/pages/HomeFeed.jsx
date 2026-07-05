@@ -112,7 +112,7 @@ const HomeFeed = () => {
     try {
       const res = await api.get('/api/users?limit=4');
       if (res.success) {
-        setSuggestedCreators(res.users.filter(u => u._id !== currentUser?.id).slice(0, 3));
+        setSuggestedCreators(res.users.filter(u => u._id !== (currentUser?.id || currentUser?._id)).slice(0, 3));
       }
     } catch (err) {
       console.error(err);
@@ -656,8 +656,8 @@ const HomeFeed = () => {
               posts.map(post => {
                 const author = post.authorId;
                 const authorIdStr = author?._id || author;
-                const isLiked = post.likes && post.likes.includes(currentUser?.id);
-                const isBookmarked = post.bookmarks && post.bookmarks.includes(currentUser?.id);
+                const isLiked = post.likes && post.likes.includes(currentUser?.id || currentUser?._id);
+                const isBookmarked = post.bookmarks && post.bookmarks.includes(currentUser?.id || currentUser?._id);
                 const isFollowing = followingIds.includes(authorIdStr);
 
                 return (
@@ -706,7 +706,7 @@ const HomeFeed = () => {
                             {isFollowing ? 'Unfollow' : 'Follow'}
                           </button>
                         )}
-                        {currentUser?.id === authorIdStr && (
+                        {((currentUser?.id || currentUser?._id) === authorIdStr || currentUser?.isAdmin) && (
                           <button 
                             onClick={() => handleDeletePost(post._id)}
                             className="text-zinc-600 hover:text-red-400 p-1.5 rounded-lg hover:bg-red-500/10 transition"
@@ -752,7 +752,7 @@ const HomeFeed = () => {
                           {post.poll.options.map((opt) => {
                             const totalVotes = post.poll.options.reduce((acc, o) => acc + o.votes.length, 0);
                             const pct = totalVotes > 0 ? Math.round((opt.votes.length / totalVotes) * 100) : 0;
-                            const hasVoted = post.poll.options.some(o => o.votes.includes(currentUser?.id));
+                            const hasVoted = post.poll.options.some(o => o.votes.includes(currentUser?.id || currentUser?._id));
 
                             return (
                               <button
@@ -859,7 +859,7 @@ const HomeFeed = () => {
                         <div className="space-y-4">
                           {postComments[post._id] && postComments[post._id].map(comment => {
                             const cAuthor = comment.authorId;
-                            const isCommentLiked = comment.likes && comment.likes.includes(currentUser?.id);
+                            const isCommentLiked = comment.likes && comment.likes.includes(currentUser?.id || currentUser?._id);
 
                             return (
                               <div key={comment._id} className="space-y-2 pl-2 border-l border-zinc-850">
