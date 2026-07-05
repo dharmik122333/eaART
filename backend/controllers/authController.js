@@ -170,101 +170,10 @@ exports.login = async (req, res) => {
         return res.status(401).json({ success: false, error: 'Invalid credentials' });
       }
 
-      // Generate 6-digit verification code
-      const otp = Math.floor(100000 + Math.random() * 900000).toString();
-      const expires = new Date(Date.now() + 5 * 60 * 1000); // valid for 5 mins
-
-      // Save OTP details to user
-      await User.updateOne(
-        { _id: user._id }, 
-        { $set: { loginOtp: otp, loginOtpExpires: expires } }
-      );
-
-      // Dispatch verification email in the background
-      sendEmail({
-        email: user.email,
-        subject: 'Project EARTH - Login Verification Code',
-        message: `Your login verification OTP is: ${otp}\n\nThis code is valid for 5 minutes. If you did not attempt to log in, please secure your password immediately.`,
-      });
-
-      return res.status(200).json({
-        success: true,
-        otpRequired: true,
-        email: user.email,
-        message: 'Verification code dispatched to your email.'
-      });
-    } else {
-      // --- Fallback Mode ---
-      const user = fallbackDb.findUserByEmail(email);
-      if (!user) {
-        return res.status(401).json({ success: false, error: 'Invalid credentials' });
-      }
-
-      const isMatch = await bcrypt.compare(password, user.password);
-      if (!isMatch) {
-        return res.status(401).json({ success: false, error: 'Invalid credentials' });
-      }
-
-      // Generate OTP for fallback mode
-      const otp = Math.floor(100000 + Math.random() * 900000).toString();
-      const expires = new Date(Date.now() + 5 * 60 * 1000);
-
-      fallbackDb.updateUser(user._id, { 
-        loginOtp: otp, 
-        loginOtpExpires: expires.toISOString() 
-      });
-
-      // Dispatch verification email in the background
-      sendEmail({
-        email: user.email,
-        subject: 'Project EARTH - Login Verification Code (Fallback Mode)',
-        message: `Your login verification OTP is: ${otp}\n\nThis code is valid for 5 minutes.`,
-      });
-
-      return res.status(200).json({
-        success: true,
-        otpRequired: true,
-        email: user.email,
-        message: 'Verification code dispatched to your email.'
-      });
-    }
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-};
-
-// @desc    Verify login OTP and issue token
-// @route   POST /api/auth/verify-otp
-// @access  Public
-exports.verifyLoginOtp = async (req, res) => {
-  try {
-    const { email, otp } = req.body;
-
-    if (!email || !otp) {
-      return res.status(400).json({ success: false, error: 'Please provide email and verification code' });
-    }
-
-    if (isMongoConnected()) {
-      const user = await User.findOne({ email });
-      if (!user) {
-        return res.status(404).json({ success: false, error: 'User not found' });
-      }
-
-      if (!user.loginOtp || user.loginOtp !== otp || new Date(user.loginOtpExpires) < new Date()) {
-        return res.status(400).json({ success: false, error: 'Invalid or expired verification code' });
-      }
-
       const token = getSignedToken(user._id);
       const refreshToken = getSignedRefreshToken(user._id);
 
-      // Save refresh token, clear OTP
-      await User.updateOne(
-        { _id: user._id },
-        { 
-          $set: { refreshToken },
-          $unset: { loginOtp: 1, loginOtpExpires: 1 } 
-        }
-      );
+      await User.updateOne({ _id: user._id }, { $set: { refreshToken } });
 
       return res.status(200).json({
         success: true,
@@ -290,21 +199,18 @@ exports.verifyLoginOtp = async (req, res) => {
       // --- Fallback Mode ---
       const user = fallbackDb.findUserByEmail(email);
       if (!user) {
-        return res.status(404).json({ success: false, error: 'User not found' });
+        return res.status(401).json({ success: false, error: 'Invalid credentials' });
       }
 
-      if (!user.loginOtp || user.loginOtp !== otp || new Date(user.loginOtpExpires) < new Date()) {
-        return res.status(400).json({ success: false, error: 'Invalid or expired verification code' });
+      const isMatch = await bcrypt.compare(password, user.password);
+      if (!isMatch) {
+        return res.status(401).json({ success: false, error: 'Invalid credentials' });
       }
 
       const token = getSignedToken(user._id);
       const refreshToken = getSignedRefreshToken(user._id);
 
-      fallbackDb.updateUser(user._id, { 
-        refreshToken,
-        loginOtp: null,
-        loginOtpExpires: null
-      });
+      fallbackDb.updateUser(user._id, { refreshToken });
 
       return res.status(200).json({
         success: true,

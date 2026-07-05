@@ -1,8 +1,7 @@
 const express = require('express');
 const { 
   register, login, getMe, refreshToken, 
-  googleLogin, forgotPassword, resetPassword, verifyEmail, logout,
-  verifyLoginOtp
+  googleLogin, forgotPassword, resetPassword, verifyEmail, logout
 } = require('../controllers/authController');
 const { protect } = require('../middleware/auth');
 
@@ -10,7 +9,6 @@ const router = express.Router();
 
 router.post('/register', register);
 router.post('/login', login);
-router.post('/verify-otp', verifyLoginOtp);
 router.post('/refresh', refreshToken);
 router.post('/google', googleLogin);
 router.post('/forgot-password', forgotPassword);
