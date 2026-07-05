@@ -1,4 +1,5 @@
 const nodemailer = require('nodemailer');
+const dns = require('dns');
 
 /**
  * Sends an email containing the verification code.
@@ -26,7 +27,9 @@ const sendEmail = async (options) => {
           user: process.env.SMTP_USER,
           pass: process.env.SMTP_PASS,
         },
-        family: 4, // Force IPv4 to bypass Render's IPv6 networking block
+        lookup: (hostname, options, callback) => {
+          return dns.lookup(hostname, { family: 4 }, callback);
+        },
         connectionTimeout: 10000 // 10 seconds timeout
       });
 
