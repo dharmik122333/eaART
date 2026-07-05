@@ -180,8 +180,8 @@ exports.login = async (req, res) => {
         { $set: { loginOtp: otp, loginOtpExpires: expires } }
       );
 
-      // Dispatch verification email
-      await sendEmail({
+      // Dispatch verification email in the background
+      sendEmail({
         email: user.email,
         subject: 'Project EARTH - Login Verification Code',
         message: `Your login verification OTP is: ${otp}\n\nThis code is valid for 5 minutes. If you did not attempt to log in, please secure your password immediately.`,
@@ -214,7 +214,8 @@ exports.login = async (req, res) => {
         loginOtpExpires: expires.toISOString() 
       });
 
-      await sendEmail({
+      // Dispatch verification email in the background
+      sendEmail({
         email: user.email,
         subject: 'Project EARTH - Login Verification Code (Fallback Mode)',
         message: `Your login verification OTP is: ${otp}\n\nThis code is valid for 5 minutes.`,
